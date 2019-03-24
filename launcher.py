@@ -23,12 +23,12 @@ class CommandStatus(json.JSONEncoder):
         return json.dumps(self,  cls=CommandStatus)
     
 class Launcher(object):
-    def __init__(self, name, work_dir):
+    def __init__(self, user, name, work_dir):
+        self.user = user
         self.name = name
         self.work_dir = work_dir
         self.dependences = []
         self.dependence_names = []
-        self.last_update_time = 0
         self.is_resoloved = False
         
     def set_start_command(self
@@ -68,7 +68,31 @@ class Launcher(object):
             raise RuntimeError([cmd_status])
         
         return cmd_status
-    
+        
+    def checkPID(pidfile):
+        if not pidfile:
+            return
+        if os.path.exists(pidfile):
+            try:
+                f = open(pidfile)
+                pid = int(f.read())
+            except ValueError:
+                sys.exit('Pidfile %s contains non-numeric value' % pidfile)
+            finally:
+                f.close()
+            try:
+                os.kill(pid, 0)
+            except OSError as why:
+                if why[0] == errno.ESRCH:
+                    # The pid doesnt exists.
+                    print(('Removing stale pidfile %s' % pidfile))
+                    os.remove(pidfile)
+                else:
+                    sys.exit("Can't check status of PID %s from pidfile %s: %s" %
+                             (pid, pidfile, why[1]))
+            else:
+                sys.exit("Another server is running, PID %s\n" %  pid)
+                
     def run_as_daemon(self, cmd, timeout=1.0):
         try:
             pid_file_name = '/tmp/'+self.name+'.pid'
@@ -130,6 +154,10 @@ class Launcher(object):
             if not self.is_resoloved:
                 return [CommandStatus(self.start_cmd, -1, 'unresoloved')]
             
+            pid = self.get_pid()
+            if 0 != pid:
+                return [CommandStatus(self.start_cmd, -1, 'already started,pid={0}'.format(pid))]
+                
             result=[]
             for dep_launcher in self.dependences:
                 result.extend(dep_launcher.do_start())
@@ -178,3 +206,10 @@ class Launcher(object):
             raise RuntimeError(result)
         finally:
             return result
+    
+    def do_unknown(self, do_4_dep = False):
+        return [CommandStatus('unknown', -1, 'unknown op')]
+    
+    def format_result(self, result):
+        return '['+'\n'.join([json.dumps(i, cls=CommandStatus) for i in result])+']'
+        

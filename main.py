@@ -48,9 +48,9 @@ class LauncherServer(socketserver.StreamRequestHandler):
                             result = launcher.do_start(waittime)
                         else:
                             do_4_dep = None if 1==len(commands) else bool(commands[1])
-                            op_fun = getattr(launcher, 'do_{0}'.format(op), launcher.unknow_op)
+                            op_fun = getattr(launcher, 'do_{0}'.format(op), launcher.do_unknown)
                             result = op_fun(launcher, do_4_dep)
-                        result = '['+'\n'.join([json.dumps(i, cls=) for i in result])+']'
+                        result = launcher.format_result(result)
                 
             self.wfile.write(result)
         
