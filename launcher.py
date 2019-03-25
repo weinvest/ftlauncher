@@ -91,8 +91,9 @@ class Launcher(object):
             else:
                 os.environ[ld_library_path] = ':'.join([work_dir, '/usr/local/lib', '/usr/lib'])
                 
-            p = subprocess.Popen(cmd, stdout=out, stderr=out, cwd=self.work_dir, shell=True,  env=os.environ)
-            retcode = p.wait(timeout=5)
+            p = subprocess.Popen(cmd, stdout=out, stderr=out, cwd=self.work_dir, shell=True,  env=os.environ, close_fds=True)
+            p.wait(timeout=5)
+            retcode = p.returncode
         except Exception as e:
             msg = str(e)
             retcode = -1
@@ -102,7 +103,7 @@ class Launcher(object):
         out.seek(0)
         msg = [str(s) for s in out.readlines()]
         if 0 == len(msg):
-            msg = 'on output'
+            msg = os.strerror(retcode)
         else:
             msg = ''.join(msg)
             
@@ -139,12 +140,17 @@ class Launcher(object):
                 out_file_name = os.path.join(self.work_dir, 'stdout.txt')
                 f = open(out_file_name, 'r')
                 msg = [str(s) for s in f.readlines()]
-            except:
+            except Exception as e:
                 retcode=2
-                msg = os.strerror(retcode)
+                msg = str(e)
             return CommandStatus(cmd, retcode, msg)
-            
+       
+        os.umask(0)
         os.setsid()
+        for i in range(0, 1024):
+            os.close(i)
+        
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)    
         cc_pid=os.fork()
         if 0 != cc_pid:   # launch child and...
             try:
@@ -155,18 +161,21 @@ class Launcher(object):
                 retcode = 0
             except OSError as oe:
                 retcode = oe.errorno
+            except Exception:
+                retcode = -1
+
             return retcode
         
         #write pid
         try:
-            f = open(self.pid_file_name,'wb')
+            sf = os.open(self.pid_file_name, os.RDWR|os.O_CREAT)
+            os.dup2(sf, 3)
+            os.close(sf)
+            
+            f = open(self.pid_file_name,'w')
             f.write(str(os.getpid()))
         finally:
             f.close()
-    
-        signal.signal(signal.SIGHUP, signal.SIG_IGN)
-        for i in range(0, 1024):
-            os.close(i)
         
         stdin = os.open('/dev/null', os.O_RDWR)
         outfile = os.open('stdout.txt',os.O_RDWR | os.O_CREAT)
@@ -182,7 +191,6 @@ class Launcher(object):
         sys.stderr = sys.stdout
 
         os.umask(0)
-        sys.stdout.flush()
 
         args = cmd.split()
         os.execv(args[0], args)
@@ -191,6 +199,7 @@ class Launcher(object):
     def set_working_dir(f, self, pa):
         try:
             oldcwd = os.getcwd()
+            print('set current dir:{0}'.format(self.work_dir))
             os.chdir(self.work_dir)
             result = f(self, pa)
         finally:
@@ -217,7 +226,7 @@ class Launcher(object):
             cur_cmd = self.post_start_cmd
             result.append(self.run_cmd(self.post_start_cmd, self.ignore_post_start_error))
         except RuntimeError as e:
-            result.extend(e.args[0])
+            result.append(e.args[0])
         except Exception as e:
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
         finally:
@@ -238,7 +247,7 @@ class Launcher(object):
                 for dep_launcher in self.dependences:
                     result.extend(dep_launcher.do_stop(stop_dependences))
         except RuntimeError as e:
-            result.extend(e.args[0])
+            result.append(e.args[0])
         except Exception as e:
             result.append(CommandStatus(cur_cmd, -1,  str(e)))            
         finally:
@@ -264,7 +273,7 @@ class Launcher(object):
                     result.extend(dep_launcher.do_status(collect_dependences))
                     
         except RuntimeError as e:
-            result.extend(e.args[0])
+            result.append(e.args[0])
         except Exception as e:
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
         finally:

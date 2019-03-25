@@ -55,7 +55,7 @@ class Loader(object):
             return
             
         exe_name = start_cmd.split()[0]
-        default_stop_cmd = r"kill -15 `ps aux|grep -h %s | grep -h %s | awk '{print $2}'`" % (exe_name, launcher_name)
+        default_stop_cmd = r"ps aux|grep -h %s | grep -h %s | awk '{print $2}|xargs -n 1 -I pid kill -15 pid" % (exe_name, launcher_name)
         default_status_cmd = 'ps aux|grep -h {0}|grep -h {1}'.format(exe_name, launcher_name)
         launcher = Launcher(user, launcher_name, os.path.join(self.home_root, user), workdir)
         launcher.set_start_command(start_cmd

@@ -56,11 +56,8 @@ class LauncherServer(socketserver.StreamRequestHandler):
             result += '\n'    
             result = result.encode('utf-8')
             #print(type(result))
-            try:
-                self.wfile.write(result)
-                self.wfile.close()
-            except:
-                pass
+            self.wfile.write(result)
+
         
 if __name__ == '__main__':
     if 3 != len(sys.argv):
