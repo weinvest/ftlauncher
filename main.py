@@ -10,6 +10,7 @@ class LauncherServer(socketserver.StreamRequestHandler):
         restart process_name restart_dep?
         ls [user]
         '''
+        super(LauncherServer,  self).setup()
         self.loader = loader.Loader()
         self.load()
         
@@ -23,7 +24,7 @@ class LauncherServer(socketserver.StreamRequestHandler):
         if elpased > 60:
             self.load()
             
-        commands = self.rfile.readline().strip()
+        commands = self.rfile.readline().strip().decode()
         commands = commands.split()
         if 0 == len(commands):
             self.wfile.write(self.usage)
@@ -44,15 +45,22 @@ class LauncherServer(socketserver.StreamRequestHandler):
                     else:
                         op = commands[0]
                         if op == 'start':
-                            waittime = None if 1==len(commands) else float(commands[1])
+                            waittime = None if 2==len(commands) else float(commands[2])
                             result = launcher.do_start(waittime)
                         else:
-                            do_4_dep = None if 1==len(commands) else bool(commands[1])
+                            do_4_dep = None if 2==len(commands) else bool(commands[1])
                             op_fun = getattr(launcher, 'do_{0}'.format(op), launcher.do_unknown)
-                            result = op_fun(launcher, do_4_dep)
+                            result = op_fun(do_4_dep)
                         result = launcher.format_result(result)
-                
-            self.wfile.write(result)
+            
+            result += '\n'    
+            result = result.encode('utf-8')
+            #print(type(result))
+            try:
+                self.wfile.write(result)
+                self.wfile.close()
+            except:
+                pass
         
 if __name__ == '__main__':
     if 3 != len(sys.argv):
@@ -60,7 +68,7 @@ if __name__ == '__main__':
         sys.exit(-1)
     
     host = sys.argv[1]
-    port = sys.argv[2]    
+    port = int(sys.argv[2])
     with socketserver.TCPServer((host, port), LauncherServer) as server:
         # Activate the server; this will keep running until you
         # interrupt the program with Ctrl-C

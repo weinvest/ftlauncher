@@ -1,0 +1,4 @@
+#/bin/bash
+echo "$1 $2" | nc 127.0.0.1 8838
+sleep 1
+
