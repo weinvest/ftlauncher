@@ -41,7 +41,7 @@ class Launcher(object):
             return None
             
         p1 = p.replace('~',  self.home_dir) 
-        return p1 
+        return p1.strip() 
         
     def set_start_command(self
         , cmd
@@ -50,6 +50,13 @@ class Launcher(object):
         , ignore_pre_error=False
         , ignore_post_error=False):
         self.start_cmd = self.normalize_path(cmd)
+        self.start_cmd += ' -n ' + self.name
+        if not self.start_cmd.startswith('nohup'):
+            self.start_cmd = 'nohup {0} '.format(self.start_cmd)
+        
+        if '>' not in self.start_cmd:
+            self.start_cmd += ' >stdout.txt'
+            
         self.pre_start_cmd = self.normalize_path(pre_start_cmd)
         self.post_start_cmd = self.normalize_path(post_start_cmd)
         self.ignore_pre_start_error = ignore_pre_error
@@ -74,7 +81,14 @@ class Launcher(object):
     def add_dependence(self, launcher):
         self.dependences.append(launcher)
     
-    def run_cmd(self, cmd, ignore_error=False):
+    def set_environ(self, dir):
+        ld_library_path= 'LD_LIBRARY_PATH'
+        if ld_library_path in os.environ:
+            os.environ[ld_library_path] += ':'+ dir
+        else:
+            os.environ[ld_library_path] = ':'.join([dir, '/usr/local/lib', '/usr/lib'])    
+            
+    def run_cmd(self, cmd, ignore_error=False, timeout=5):
         if cmd is None:
             return None
   
@@ -85,14 +99,10 @@ class Launcher(object):
             args = cmd.split()
             work_dir = os.path.dirname(args[0])
             work_dir = work_dir if 0 != len(work_dir) else self.work_dir
-            ld_library_path= 'LD_LIBRARY_PATH'
-            if ld_library_path in os.environ:
-                os.environ[ld_library_path] += ':'+work_dir
-            else:
-                os.environ[ld_library_path] = ':'.join([work_dir, '/usr/local/lib', '/usr/lib'])
+            self.set_environ(work_dir)
                 
-            p = subprocess.Popen(cmd, stdout=out, stderr=out, cwd=self.work_dir, shell=True,  env=os.environ, close_fds=True)
-            p.wait(timeout=5)
+            p = subprocess.Popen(cmd, stdout=out, stderr=out, cwd=work_dir, shell=True,  env=os.environ, close_fds=True)
+            p.wait(timeout=timeout)
             retcode = p.returncode
         except Exception as e:
             msg = str(e)
@@ -133,6 +143,29 @@ class Launcher(object):
         return 0
     
     def run_as_daemon(self, cmd, timeout=1.0):
+        retcode=0
+        try:
+            p = subprocess.Popen(cmd , cwd=self.work_dir, shell=True,  env=os.environ, close_fds=True)
+            p.wait(timeout=timeout)
+            retcode = p.returncode 
+        except subprocess.TimeoutExpired:
+            retcode=0
+        except Exception as e:
+            print('hhhhh' + str(e))
+            print(type(e))
+            retcode=1
+            msg=str(e)
+        finally:
+            try:
+                out_file_name = os.path.join(self.work_dir, 'stdout.txt')
+                f = open(out_file_name, 'r')
+                msg = [str(s) for s in f.readlines()]
+            except Exception as e:
+                retcode=2
+                msg = str(e)
+            return CommandStatus(cmd, retcode, msg)
+            
+            
         c_pid = os.fork()
         if 0 != c_pid:
             retcode = ps_utils.wait_pid(c_pid, 3600.0*timeout)
@@ -201,6 +234,7 @@ class Launcher(object):
             oldcwd = os.getcwd()
             print('set current dir:{0}'.format(self.work_dir))
             os.chdir(self.work_dir)
+            self.set_environ(self.work_dir)
             result = f(self, pa)
         finally:
             os.chdir(oldcwd)
