@@ -37,24 +37,28 @@ class LauncherServer(socketserver.StreamRequestHandler):
                 result = self.loader.list(user)
                 result = '\n'.join(result)
             else:
+                result = ''
                 if 1 == len(commands):
                     result = self.usage
                 else:
-                    process_name = commands[1]
-                    user, process_name = self.loader.split_launcher_name(process_name)
-                    launcher = self.loader.get_launcher(process_name, user)
-                    if launcher is None:
-                        result = 'no launcher named {0}'.format(process_name)
-                    else:
-                        op = commands[0]
-                        if op == 'start':
-                            waittime = None if 2==len(commands) else float(commands[2])
-                            result = launcher.do_start(waittime)
+                    try:
+                        process_name = commands[1]
+                        user, process_name = self.loader.split_launcher_name(process_name)
+                        launcher = self.loader.get_launcher(process_name, user)
+                        if launcher is None:
+                            result = 'no launcher named {0}'.format(process_name)
                         else:
-                            do_4_dep = None if 2==len(commands) else bool(commands[1])
-                            op_fun = getattr(launcher, 'do_{0}'.format(op), launcher.do_unknown)
-                            result = op_fun(do_4_dep)
-                        result = launcher.format_result(result)
+                            op = commands[0]
+                            if op == 'start':
+                                waittime = None if 2==len(commands) else float(commands[2])
+                                result = launcher.do_start(waittime)
+                            else:
+                                do_4_dep = None if 2==len(commands) else bool(commands[1])
+                                op_fun = getattr(launcher, 'do_{0}'.format(op), launcher.do_unknown)
+                                result = op_fun(do_4_dep)
+                            result = launcher.format_result(result)
+                    except Exception as e:
+                        result += str(e)
             
             result += '\n'    
             result = result.encode('utf-8')

@@ -51,11 +51,11 @@ class Launcher(object):
         , ignore_post_error=False):
         self.start_cmd = self.normalize_path(cmd)
         self.start_cmd += ' -n ' + self.name
-        if not self.start_cmd.startswith('nohup'):
-            self.start_cmd = 'nohup {0} '.format(self.start_cmd)
+        #if not self.start_cmd.startswith('nohup'):
+        #    self.start_cmd = 'nohup {0} '.format(self.start_cmd)
         
-        if '>' not in self.start_cmd:
-            self.start_cmd += ' >stdout.txt'
+        #if '>' not in self.start_cmd:
+        #self.start_cmd += ' >stdout.txt'
             
         self.pre_start_cmd = self.normalize_path(pre_start_cmd)
         self.post_start_cmd = self.normalize_path(post_start_cmd)
@@ -125,18 +125,22 @@ class Launcher(object):
     def get_pid(self):
         if os.path.exists( self.pid_file_name):
             try:
-                f = open( self.pid_file_name)
+                f = open(self.pid_file_name, 'r')
                 pid = int(f.read())
-            except ValueError:
+            except Exception:
                 return 0
             finally:
                 f.close()
+                
             try:
                 os.kill(pid, 0)
             except OSError as why:
-                if why[0] == os.errno.ESRCH:
+                if why.errno == os.errno.ESRCH:
                     # The pid doesnt exists.
                     os.remove(self.pid_file_name)
+                return 0
+            except Exception as e:
+                print(str(e))
                 return 0
             else:
                 return pid
@@ -149,16 +153,18 @@ class Launcher(object):
             try:
                 out_file_name = os.path.join(self.work_dir, 'stdout.txt')
                 f = open(out_file_name, 'r')
+                #msg = '\n'.join([str(s) for s in f.readlines()])
                 msg = [str(s) for s in f.readlines()]
             except Exception as e:
                 retcode=2
                 msg = str(e)
+
             return CommandStatus(cmd, retcode, msg)
        
         os.umask(0)
         os.setsid()
-        for i in range(0, 1024):
-            os.close(i)
+
+        os.closerange(0, 1024)
 
         stdin = os.open('/dev/null', os.O_RDWR)
         outfile = os.open('stdout.txt',os.O_RDWR | os.O_CREAT)
@@ -191,9 +197,9 @@ class Launcher(object):
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
         #write pid
         try:
-            #sf = os.open(self.pid_file_name, os.RDWR|os.O_CREAT)
-            #os.dup2(sf, 3)
-            #os.close(sf)
+            sf = os.open(self.pid_file_name, os.O_RDWR|os.O_CREAT)
+            os.dup2(sf, 3)
+            os.close(sf)
 
             f = open(self.pid_file_name,'w')
             f.write(str(os.getpid()))
@@ -212,7 +218,11 @@ class Launcher(object):
             print('set current dir:{0}'.format(self.work_dir))
             os.chdir(self.work_dir)
             self.set_environ(self.work_dir)
+            print('iioiwitt===')
             result = f(self, pa)
+            print('iowitt')
+        except Exception as e:
+            print(str(e))
         finally:
             os.chdir(oldcwd)
         return result
