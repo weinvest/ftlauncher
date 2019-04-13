@@ -164,7 +164,11 @@ class Launcher(object):
         os.umask(0)
         os.setsid()
 
-        os.closerange(0, 1024)
+        for fd in range(0, 8192):
+            try:
+                os.close(fd)
+            except:
+                pass
 
         stdin = os.open('/dev/null', os.O_RDWR)
         outfile = os.open('stdout.txt',os.O_RDWR | os.O_CREAT)
@@ -180,20 +184,6 @@ class Launcher(object):
         sys.stderr = sys.stdout
 
         cc_pid=os.fork()
-        if 0 != cc_pid:   # launch child and...
-            try:
-                retcode = ps_utils.wait_pid(cc_pid, timeout)
-            except RuntimeError:
-                retcode = -1
-            except ps_utils.TimeoutExpired:
-                retcode = 0
-            except OSError as oe:
-                retcode = oe.errorno
-            except Exception:
-                retcode = -1
-
-            return retcode
-
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
         #write pid
         try:
@@ -218,9 +208,7 @@ class Launcher(object):
             print('set current dir:{0}'.format(self.work_dir))
             os.chdir(self.work_dir)
             self.set_environ(self.work_dir)
-            print('iioiwitt===')
             result = f(self, pa)
-            print('iowitt')
         except Exception as e:
             print(str(e))
         finally:
