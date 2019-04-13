@@ -295,5 +295,5 @@ class Launcher(object):
     
     def format_result(self, result):
         js_result = [str(i) for i in result]
-        return '['+'\n'.join(js_result)+']'
+        return '['+',\n'.join(js_result)+']'
         

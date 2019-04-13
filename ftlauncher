@@ -2,6 +2,7 @@
 import sys
 import socket
 import json
+from termcolor import colored, cprint
 
 server_ip = '127.0.0.1'
 server_port = 8838
@@ -13,7 +14,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect((server_ip, server_port))
 try:
     server_cmd = ' '.join(sys.argv[1:]) + '\n'
-    print(server_cmd)
+    #print(server_cmd)
     server_cmd.encode('utf-8')
     sock.sendall(server_cmd)
 
@@ -24,8 +25,28 @@ try:
         recved = sock.recv(1024)
 
     result.decode('utf-8')
-    jr = json.loads(result)
-    print(jr)
+    if 0 != len(result) and '[' == result[0]:
+        jr = json.loads(result)
+        step_idx = 0
+        for step in jr:
+            step_idx += 1
+            cprint('Step {0}'.format(step_idx), 'green', attrs=['bold'])
+            title_color = 'yellow'
+            content_color = 'white'
+            cmd = colored(u'command:', title_color)
+            cmd += colored(step[u'command'], content_color, attrs=['underline'])
+            print(cmd)
+
+            retcode = colored(u'retcode:', title_color)
+            retcode += colored(step[u'retcode'], content_color)
+            print(retcode)
+
+            cprint(u'output:', title_color)
+            output = step[u'message']
+            print(output)
+            print('')
+    else:
+        print(result[:-2])
 except Exception as e:
     print('exception ' + str(e))
     sys.exit(-1)
