@@ -143,29 +143,6 @@ class Launcher(object):
         return 0
     
     def run_as_daemon(self, cmd, timeout=1.0):
-        retcode=0
-        try:
-            p = subprocess.Popen(cmd , cwd=self.work_dir, shell=True,  env=os.environ, close_fds=True)
-            p.wait(timeout=timeout)
-            retcode = p.returncode 
-        except subprocess.TimeoutExpired:
-            retcode=0
-        except Exception as e:
-            print('hhhhh' + str(e))
-            print(type(e))
-            retcode=1
-            msg=str(e)
-        finally:
-            try:
-                out_file_name = os.path.join(self.work_dir, 'stdout.txt')
-                f = open(out_file_name, 'r')
-                msg = [str(s) for s in f.readlines()]
-            except Exception as e:
-                retcode=2
-                msg = str(e)
-            return CommandStatus(cmd, retcode, msg)
-            
-            
         c_pid = os.fork()
         if 0 != c_pid:
             retcode = ps_utils.wait_pid(c_pid, 3600.0*timeout)
@@ -182,8 +159,20 @@ class Launcher(object):
         os.setsid()
         for i in range(0, 1024):
             os.close(i)
-        
-        signal.signal(signal.SIGHUP, signal.SIG_IGN)    
+
+        stdin = os.open('/dev/null', os.O_RDWR)
+        outfile = os.open('stdout.txt',os.O_RDWR | os.O_CREAT)
+        os.dup2(stdin,0)
+        os.dup2(outfile,1)
+        os.dup2(outfile,2)
+
+        os.close(stdin)
+        os.close(outfile)
+
+        sys.stdin = open('/dev/null','r')
+        sys.stdout = open('stdout.txt','w')
+        sys.stderr = sys.stdout
+
         cc_pid=os.fork()
         if 0 != cc_pid:   # launch child and...
             try:
@@ -198,33 +187,21 @@ class Launcher(object):
                 retcode = -1
 
             return retcode
-        
+
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
         #write pid
         try:
-            sf = os.open(self.pid_file_name, os.RDWR|os.O_CREAT)
-            os.dup2(sf, 3)
-            os.close(sf)
-            
+            #sf = os.open(self.pid_file_name, os.RDWR|os.O_CREAT)
+            #os.dup2(sf, 3)
+            #os.close(sf)
+
             f = open(self.pid_file_name,'w')
             f.write(str(os.getpid()))
         finally:
             f.close()
-        
-        stdin = os.open('/dev/null', os.O_RDWR)
-        outfile = os.open('stdout.txt',os.O_RDWR | os.O_CREAT)
-        os.dup2(stdin,0)
-        os.dup2(outfile,1)
-        os.dup2(outfile,2)
 
-        os.close(stdin)
-        os.close(outfile)
-
-        sys.stdin = open('/dev/null','r')
-        sys.stdout = open('stdout.txt','w')
-        sys.stderr = sys.stdout
 
         os.umask(0)
-
         args = cmd.split()
         os.execv(args[0], args)
     
