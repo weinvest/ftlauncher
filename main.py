@@ -1,15 +1,18 @@
+#!/usr/bin/env python
 import socketserver
 import loader
 import sys
 import time
 class LauncherServer(socketserver.StreamRequestHandler):
     def setup(self):
-        self.usage = '''start process_name [waittime]
-        stop process_name stop_dep?
-        status process_name collect_dep?
-        restart process_name restart_dep?
-        ls [user]
-        '''
+        self.usage = ['usage:'
+                      , 'start process_name [waittime]'
+                      , 'stop process_name stop_dep?'
+                      , 'status process_name collect_dep?'
+                      , 'restart process_name restart_dep?'
+                      , 'ls [user]']
+        self.usage = '\n    '.join(self.usage)
+
         super(LauncherServer,  self).setup()
         self.loader = loader.Loader()
         self.load()
@@ -35,7 +38,7 @@ class LauncherServer(socketserver.StreamRequestHandler):
                 result = '\n'.join(result)
             else:
                 if 1 == len(commands):
-                    result = self.usage()
+                    result = self.usage
                 else:
                     process_name = commands[1]
                     user, process_name = self.loader.split_launcher_name(process_name)
