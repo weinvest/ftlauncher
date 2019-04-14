@@ -1,5 +1,6 @@
 import os
 import sys
+import pwd
 import json
 import signal
 import ps_utils
@@ -205,14 +206,22 @@ class Launcher(object):
     def set_working_dir(f, self, pa):
         try:
             oldcwd = os.getcwd()
-            print('set current dir:{0}'.format(self.work_dir))
+            oldusr = os.geteuid()
+            oldgrp = os.getegid()
             os.chdir(self.work_dir)
+            work_usr = pwd.getpwnam(self.user)
+            os.seteuid(work_usr.pw_uid)
+            os.setegid(work_usr.pw_gid)
+            print('change2 work_dir:{0}, user:{1}, gid:{2}'.format(self.work_dir, self.user, work_usr.pw_gid))
             self.set_environ(self.work_dir)
             result = f(self, pa)
         except Exception as e:
             print(str(e))
         finally:
+            print('restore work_dir:{0}, user:{1}, gid:{2}'.format(oldcwd, oldusr, oldgrp))
             os.chdir(oldcwd)
+            os.seteuid(oldusr)
+            os.setegid(oldgrp)
         return result
 
     @set_working_dir        
