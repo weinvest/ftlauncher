@@ -36,7 +36,8 @@ class Loader(object):
         try:
             conf_file = open(conf_file_name, 'r')
             conf = json.load(conf_file)
-        except:
+        except Exception as e:
+            logging.warn('open conf file %s failed: %s', conf_file_name, str(e))
             return
             
         workdir = conf['work_dir']
@@ -55,8 +56,6 @@ class Loader(object):
             return
             
         exe_name = start_cmd.split()[0]
-        default_stop_cmd = r"ps aux|grep -h %s | grep -h %s | awk '{print $2}|xargs -n 1 -I pid kill -15 pid" % (exe_name, launcher_name)
-        default_status_cmd = 'ps aux|grep -h {0}|grep -h {1}'.format(exe_name, launcher_name)
         launcher = Launcher(user, launcher_name, os.path.join(self.home_root, user), workdir)
         launcher.set_start_command(start_cmd
             , conf.get('pre_start_cmd', None)
@@ -64,17 +63,22 @@ class Loader(object):
             , conf.get('ignore_pre_start_error', False)
             , conf.get('ignore_post_start_error', False)
             )
+
+        default_stop_cmd = r"ps aux|grep -h %s | grep -h %s | awk '{print $2}|xargs -n 1 -I pid kill -15 pid" % (exe_name, launcher.cmd_user)
         launcher.set_stop_command(conf.get('stop_cmd', default_stop_cmd)
             , conf.get('pre_stop_cmd', None)
             , conf.get('post_stop_cmd', None)
             , conf.get('ignore_pre_stop_error', False)
             , conf.get('ignore_post_stop_error', False)
             )
+
+        default_status_cmd = 'ps aux|grep -h {0}|grep -h {1}'.format(exe_name, launcher.cmd_user)
         launcher.set_status_command(conf.get('status_cmd', default_status_cmd))
         
         dependence_names = conf.get('dependences', '')
         launcher.dependence_names = dependence_names.split()
         self.add_launcher(user, launcher)
+        logging.info('load launcher %s success', launcher_name)
         
     def load_4_user(self, user):
         conf_dir_4_user = '.ftapp.conf'
@@ -89,10 +93,11 @@ class Loader(object):
             for conf in conf_files:
                 last_update_time = os.path.getmtime(conf)
                 launcher_name, conf_ext = os.path.splitext(conf)
-                if '.json' != conf_ext:
+                if u'.json' != conf_ext:
                    continue
                 
                 try:
+                    print('load {0}'.format(launcher_name))
                     full_name = '{0}/{1}'.format(user, launcher_name)
                     launcher = self.get_launcher(launcher_name, user)
                     lan_last_update_time = self.last_update_times.get(full_name, 0)
@@ -102,6 +107,7 @@ class Loader(object):
                         self.last_update_times[full_name] = lan_last_update_time
                         self.load_one(user, conf)
                 except Exception as e:
+                    print(str(e))
                     logging.error("load launcher %s/%s failed, detail:%s", user, launcher_name, str(e))
         finally:
             os.chdir(oldcwd)

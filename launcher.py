@@ -51,7 +51,14 @@ class Launcher(object):
         , ignore_pre_error=False
         , ignore_post_error=False):
         self.start_cmd = self.normalize_path(cmd)
-        self.start_cmd += ' -n ' + self.name
+        if -1 == self.start_cmd.find('-n'):
+            self.start_cmd += ' -n ' + self.name
+            self.cmd_user = self.name
+        else:
+            cmds = self.start_cmd.split()
+            idx = cmds.index('-n')
+            self.cmd_user = cmds[idx+1]
+        
         #if not self.start_cmd.startswith('nohup'):
         #    self.start_cmd = 'nohup {0} '.format(self.start_cmd)
         

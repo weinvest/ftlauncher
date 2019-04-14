@@ -14,7 +14,6 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect((server_ip, server_port))
 try:
     server_cmd = ' '.join(sys.argv[1:]) + '\n'
-    print(server_cmd)
     server_cmd.encode('utf-8')
     sock.sendall(server_cmd)
 
@@ -45,7 +44,6 @@ try:
                 cprint(u'output:', title_color)
                 output = step[u'message']
                 print(output)
-                print('')
         except Exception as e:
             print(result[:-2])
             print(str(e))

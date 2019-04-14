@@ -1,9 +1,11 @@
-#!/usr/bin/env python
 import socketserver
 import loader
 import sys
 import time
 class LauncherServer(socketserver.StreamRequestHandler):
+    def __init__(self, *args, **kargs):
+        super(LauncherServer, self).__init__(*args, **kargs)
+
     def setup(self):
         self.usage = ['usage:'
                       , 'start process_name [waittime]'
