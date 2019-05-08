@@ -2,6 +2,8 @@ import os
 import sys
 import pwd
 import json
+import errno
+import logging
 import signal
 import ps_utils
 import subprocess
@@ -94,11 +96,13 @@ class Launcher(object):
         if ld_library_path in os.environ:
             os.environ[ld_library_path] += ':'+ dir
         else:
-            os.environ[ld_library_path] = ':'.join([dir, '/usr/local/lib', '/usr/lib'])    
+            boost_lib = os.path.join(os.environ['BOOST_ROOT'], 'lib')
+            hdf5_lib = os.path.join(os.environ['HDF5_ROOT'], 'lib')
+            os.environ[ld_library_path] = ':'.join([dir, '/usr/local/lib', '/usr/lib', boost_lib, hdf5_lib])    
             
     def run_cmd(self, cmd, ignore_error=False, timeout=5):
         if cmd is None:
-            return None
+            return CommandStatus('', 0, 'no command execed')
   
         import tempfile
         out = tempfile.TemporaryFile(mode='w+')
@@ -113,6 +117,7 @@ class Launcher(object):
             p.wait(timeout=timeout)
             retcode = p.returncode
         except Exception as e:
+            logging.error('run command exception:%s', str(e))
             msg = str(e)
             retcode = -1
             if not ignore_error:
@@ -120,14 +125,10 @@ class Launcher(object):
                
         out.seek(0)
         msg = [str(s) for s in out.readlines()]
-        if 0 == len(msg):
-            msg = os.strerror(retcode)
-        else:
+        if 0 != len(msg):
             msg = ''.join(msg)
             
         cmd_status = CommandStatus(cmd, retcode, msg)
-        if 0 != retcode and not ignore_error:
-            raise RuntimeError(cmd_status)
         return cmd_status
         
     def get_pid(self):
@@ -143,7 +144,7 @@ class Launcher(object):
             try:
                 os.kill(pid, 0)
             except OSError as why:
-                if why.errno == os.errno.ESRCH:
+                if why.errno == errno.ESRCH:
                     # The pid doesnt exists.
                     os.remove(self.pid_file_name)
                 return 0
@@ -195,10 +196,6 @@ class Launcher(object):
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
         #write pid
         try:
-            sf = os.open(self.pid_file_name, os.O_RDWR|os.O_CREAT)
-            os.dup2(sf, 3)
-            os.close(sf)
-
             f = open(self.pid_file_name,'w')
             f.write(str(os.getpid()))
         finally:
@@ -207,58 +204,66 @@ class Launcher(object):
 
         os.umask(0)
         args = cmd.split()
-        os.execv(args[0], args)
+        self.set_environ(self.work_dir)
+        envs={'LD_LIBRARY_PATH': self.environ['LD_LIBRARY_PATH']}
+        os.execve(args[0], args, envs)
     
     @decorator
-    def set_working_dir(f, self, pa):
+    def set_working_dir(f, self):
         try:
             oldcwd = os.getcwd()
             oldusr = os.geteuid()
             oldgrp = os.getegid()
+            curgid = -1
             os.chdir(self.work_dir)
             work_usr = pwd.getpwnam(self.user)
+            curgid = work_usr.pw_gid
+            logging.info('change2 work_dir:%s, user:%s, gid:%d', self.work_dir, self.user, curgid)
             os.seteuid(work_usr.pw_uid)
-            os.setegid(work_usr.pw_gid)
-            print('change2 work_dir:{0}, user:{1}, gid:{2}'.format(self.work_dir, self.user, work_usr.pw_gid))
+            #os.setegid(work_usr.pw_gid)
             self.set_environ(self.work_dir)
-            result = f(self, pa)
+            result = f(self)
         except Exception as e:
-            print(str(e))
+            result = [CommandStatus('chusr', -1, str(e))]
+            logging.error('change2 (dir:%s, usr:%d, gid:%s)=>(dir:%s, usr:%s, gid:%s), exception:%s'
+                    , oldcwd, oldusr, oldgrp
+                    , self.work_dir, self.user, curgid
+                    , str(e))
         finally:
-            print('restore work_dir:{0}, user:{1}, gid:{2}'.format(oldcwd, oldusr, oldgrp))
+            logging.info('restore work_dir:%s, user:%d, gid:%s', oldcwd, oldusr, oldgrp)
             os.chdir(oldcwd)
             os.seteuid(oldusr)
-            os.setegid(oldgrp)
+            #os.setegid(oldgrp)
         return result
 
     @set_working_dir        
-    def do_start(self, timeout):
+    def do_start(self):
         result=[]
         try:
+            cur_cmd = 'get_pid'
             pid = self.get_pid()
             if 0 != pid:
                 return [CommandStatus(self.start_cmd, -1, 'already started,pid={0}'.format(pid))]
 
             if not self.is_resoloved:
                 return [CommandStatus(self.start_cmd, -1, 'unresoloved')]
-                
-            for dep_launcher in self.dependences:
-                result.extend(dep_launcher.do_start())
+
             cur_cmd = self.pre_start_cmd
             result.append(self.run_cmd( self.pre_start_cmd, self.ignore_pre_start_error))
             cur_cmd = self.start_cmd
             result.append(self.run_as_daemon(self.start_cmd))
             cur_cmd = self.post_start_cmd
             result.append(self.run_cmd(self.post_start_cmd, self.ignore_post_start_error))
+            return result
         except RuntimeError as e:
             result.append(e.args[0])
+            return result
         except Exception as e:
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
-        finally:
             return result
             
     @set_working_dir     
-    def do_stop(self, stop_dependences = False):
+    def do_stop(self):
         result = []
         try:
             cur_cmd = self.pre_stop_cmd
@@ -267,39 +272,32 @@ class Launcher(object):
             result.append(self.run_cmd(self.stop_cmd))
             cur_cmd = self.post_stop_cmd
             result.append(self.run_cmd(self.post_stop_cmd, self.ignore_post_stop_error))
-            
-            if stop_dependences:
-                for dep_launcher in self.dependences:
-                    result.extend(dep_launcher.do_stop(stop_dependences))
         except RuntimeError as e:
             result.append(e.args[0])
         except Exception as e:
-            result.append(CommandStatus(cur_cmd, -1,  str(e)))            
+            result.append(CommandStatus(cur_cmd, -1,  str(e)))
         finally:
             return result
             
     @set_working_dir         
-    def do_restart(self, restart_dependences = False):
-        stop_result = self.do_stop(restart_dependences)
+    def do_restart(self):
+        stop_result = self.do_stop()
         start_result = self.do_start()
         result = stop_result
         result.extend(start_result)
         return result
     
     @set_working_dir     
-    def do_status(self, collect_dependences = False):
+    def do_status(self):
         result = []
         try:
             cur_cmd=self.status_cmd
             status_result = self.run_cmd(self.status_cmd)
             result.append(status_result)
-            if collect_dependences:
-                for dep_launcher in self.dependences:
-                    result.extend(dep_launcher.do_status(collect_dependences))
-                    
         except RuntimeError as e:
             result.append(e.args[0])
         except Exception as e:
+            logging.error('do_status exception:%s', str(e))
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
         finally:
             return result
@@ -308,6 +306,9 @@ class Launcher(object):
         return [CommandStatus('unknown', -1, 'unknown op')]
     
     def format_result(self, result):
-        js_result = [str(i) for i in result]
-        return '['+',\n'.join(js_result)+']'
+        if isinstance(result, list):
+            js_result = [str(i) for i in result]
+            return '['+',\n'.join(js_result)+']'
+        else:
+            return result
         

@@ -14,7 +14,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect((server_ip, server_port))
 try:
     server_cmd = ' '.join(sys.argv[1:]) + '\n'
-    server_cmd.encode('utf-8')
+    server_cmd = server_cmd.encode('utf-8')
     sock.sendall(server_cmd)
 
     result = b''
@@ -23,8 +23,8 @@ try:
         result += recved
         recved = sock.recv(1024)
 
-    result.decode('utf-8')
-    if 0 != len(result) and '[' == result[0]:
+    result = result.decode('utf-8')
+    if 0 != len(result) and '[' == result[0] and not result.startswith('[Er') and not result.startswith('[[Er'):
         try:
             jr = json.loads(result)
             step_idx = 0
@@ -45,10 +45,10 @@ try:
                 output = step[u'message']
                 print(output)
         except Exception as e:
-            print(result[:-2])
+            print(result[:-1])
             print(str(e))
     else:
-        print(result[:-2])
+        print(result[:-1])
 except Exception as e:
     print('exception ' + str(e))
     sys.exit(-1)

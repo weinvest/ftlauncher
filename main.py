@@ -1,3 +1,4 @@
+import os
 import socketserver
 import loader
 import sys
@@ -47,22 +48,25 @@ class LauncherServer(socketserver.StreamRequestHandler):
                         process_name = commands[1]
                         user, process_name = self.loader.split_launcher_name(process_name)
                         launcher = self.loader.get_launcher(process_name, user)
+                        #print(os.getcwd())
                         if launcher is None:
                             result = 'no launcher named {0}'.format(process_name)
                         else:
                             op = commands[0]
-                            if op == 'start':
-                                waittime = None if 2==len(commands) else float(commands[2])
-                                result = launcher.do_start(waittime)
-                            else:
-                                do_4_dep = None if 2==len(commands) else bool(commands[1])
-                                op_fun = getattr(launcher, 'do_{0}'.format(op), launcher.do_unknown)
-                                result = op_fun(do_4_dep)
+                            do_4_dep = False if 2==len(commands) else bool(commands[2])
+                            result = []
+                            if do_4_dep:
+                                for dep in launcher.dependences:
+                                    dep_fun = getattr(dep, 'do_{0}'.format(op), dep.do_unknown)
+                                    result.extend(dep_fun())
+
+                            op_fun = getattr(launcher, 'do_{0}'.format(op), launcher.do_unknown)
+                            result.extend(op_fun())
                             result = launcher.format_result(result)
                     except Exception as e:
                         result += str(e)
             
-            result += '\n'    
+            #result += '\n'    
             result = result.encode('utf-8')
             #print(type(result))
             self.wfile.write(result)
@@ -78,5 +82,6 @@ if __name__ == '__main__':
     with socketserver.TCPServer((host, port), LauncherServer) as server:
         # Activate the server; this will keep running until you
         # interrupt the program with Ctrl-C
+        server.allow_reuse_address = True
         server.serve_forever()
         

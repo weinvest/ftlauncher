@@ -64,7 +64,7 @@ class Loader(object):
             , conf.get('ignore_post_start_error', False)
             )
 
-        default_stop_cmd = r"ps aux|grep -h %s | grep -h %s | awk '{print $2}|xargs -n 1 -I pid kill -15 pid" % (exe_name, launcher.cmd_user)
+        default_stop_cmd = r"ps aux|grep -h %s | grep -h %s | awk '{print $2}'|xargs -n 1 -I p kill p" % (exe_name, launcher.cmd_user)
         launcher.set_stop_command(conf.get('stop_cmd', default_stop_cmd)
             , conf.get('pre_stop_cmd', None)
             , conf.get('post_stop_cmd', None)
@@ -72,7 +72,7 @@ class Loader(object):
             , conf.get('ignore_post_stop_error', False)
             )
 
-        default_status_cmd = 'ps aux|grep -h {0}|grep -h {1}'.format(exe_name, launcher.cmd_user)
+        default_status_cmd = 'ps aux|grep -h {0}|grep -h {1}|grep -vh "grep"'.format(exe_name, launcher.cmd_user)
         launcher.set_status_command(conf.get('status_cmd', default_status_cmd))
         
         dependence_names = conf.get('dependences', '')
