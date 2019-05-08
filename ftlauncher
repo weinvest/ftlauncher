@@ -50,6 +50,7 @@ try:
     else:
         print(result[:-1])
 except Exception as e:
+    print('hhh')
     print('exception ' + str(e))
     sys.exit(-1)
 finally:
