@@ -6,6 +6,8 @@ import errno
 import logging
 import signal
 import ps_utils
+import daemon
+import datetime
 import subprocess
 from decorator import decorator
 
@@ -154,7 +156,21 @@ class Launcher(object):
             else:
                 return pid
         return 0
-    
+
+    def split_exe_info(self, executale):
+        exe_dir = executale
+        exe_path = executale
+        if os.path.isfile(exe_path):
+            exe_dir = os.path.dirname(exe_dir)
+        else:
+            raise Exception(executale + ' must be a executable file')
+        return (exe_dir, exe_path, os.path.basename(exe_path))
+
+    def redirect(self, file_name, fid, option):
+        f = os.open(file_name, option)
+        os.dup2(f, fid)
+        os.close(f)
+
     def run_as_daemon(self, cmd, timeout=1.0):
         c_pid = os.fork()
         if 0 != c_pid:
@@ -169,45 +185,64 @@ class Launcher(object):
                 msg = str(e)
 
             return CommandStatus(cmd, retcode, msg)
-       
-        os.umask(0)
-        os.setsid()
-
-        for fd in range(0, 8192):
+        
+        #close all opened fds except stdin/stdout/stderr
+        for fd in range(3, 8192):
             try:
                 os.close(fd)
             except:
                 pass
 
-        stdin = os.open('/dev/null', os.O_RDWR)
-        outfile = os.open('stdout.txt',os.O_RDWR | os.O_CREAT)
-        os.dup2(stdin,0)
-        os.dup2(outfile,1)
-        os.dup2(outfile,2)
-
-        os.close(stdin)
-        os.close(outfile)
-
-        sys.stdin = open('/dev/null','r')
-        sys.stdout = open('stdout.txt','w')
-        sys.stderr = sys.stdout
-
-        cc_pid=os.fork()
-        signal.signal(signal.SIGHUP, signal.SIG_IGN)
-        #write pid
+        exe_dir, exe_path, exe_name = self.split_exe_info(cmd.split()[0])
+        pid_file_name = '/tmp/%s.pid' % exe_name
         try:
-            f = open(self.pid_file_name,'w')
-            f.write(str(os.getpid()))
-        finally:
-            f.close()
+            pid_file = open(pid_file_name, 'r')
+            daemon.checkPID(pid_file_name)
+        except Exception:
+            pass
 
+        try:
+            daemon.daemonize(pid_file_name)
+            signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
-        os.umask(0)
-        args = cmd.split()
-        self.set_environ(self.work_dir)
-        envs={'LD_LIBRARY_PATH': self.environ['LD_LIBRARY_PATH']}
-        os.execve(args[0], args, envs)
-    
+            self.redirect('stdout.txt', 1, os.O_RDWR| os.O_CREAT)
+            self.redirect('stdout.txt', 2, os.O_RDWR| os.O_CREAT)
+            sys.stdout = sys.stderr = open('stdout.txt','w')
+
+            child_pid = os.fork()
+            if 0 == child_pid:
+                os.chdir(exe_dir)
+
+                str_pid = str(os.getpid())
+                stdin_file = 'stdin.' + str_pid
+                stdout_file = 'stdout.' + str_pid
+                stderr_file = 'stderr.' + str_pid
+
+                self.redirect(stdin_file, 0, os.O_RDONLY | os.O_CREAT)
+                self.redirect(stdout_file, 1, os.O_RDWR| os.O_CREAT)
+                self.redirect(stderr_file, 2, os.O_RDWR | os.O_CREAT)
+
+                sys.stdin = open(stdin_file,'r')
+                sys.stdout = open(stdout_file,'w')
+                sys.stderr = open(stderr_file,'w')
+
+                args = cmd.split()
+                self.set_environ(self.work_dir)
+                envs={'LD_LIBRARY_PATH': os.environ['LD_LIBRARY_PATH']}
+                os.execve(args[0], args, envs)
+                os.execv(exe_path, args)
+            else:
+                sys.stdout.write(f'{datetime.datetime.now().isoformat()} {exe_name} started, pid is: {child_pid}\n')
+                result = os.waitpid(child_pid, 0)
+                sys.stdout.write(f'{datetime.datetime.now().isoformat()} {exe_name} stopped, pid is: {child_pid}, status: {result[1]}\n')
+                sys.stdout.flush()
+        except Exception as ex:
+            sys.stdout.write(f'{datetime.datetime.now().isoformat()} {exe_name} exception, pid is: {child_pid}, detail: {ex}\n')
+            sys.stdout.flush()
+
+            if os.path.exists(pid_file_name):
+                os.remove(pid_file_name)
+
     @decorator
     def set_working_dir(f, self):
         try:
