@@ -51,20 +51,21 @@ def set_working_dir(f, self):
         work_usr = pwd.getpwnam(self.user)
         curgid = work_usr.pw_gid
         logging.info('change2 work_dir:%s, user:%s, gid:%d', self.work_dir, self.user, curgid)
-        os.seteuid(work_usr.pw_uid)
+        #os.seteuid(work_usr.pw_uid)
         #os.setegid(work_usr.pw_gid)
         set_environ(self.work_dir)
-        result = f(self)
     except Exception as e:
         result = [CommandStatus('chusr', -1, str(e))]
         logging.error('change2 (dir:%s, usr:%d, gid:%s)=>(dir:%s, usr:%s, gid:%s), exception:%s'
                 , oldcwd, oldusr, oldgrp
                 , self.work_dir, self.user, curgid
                 , str(e))
+    else:
+        result = f(self)
     finally:
         logging.info('restore work_dir:%s, user:%d, gid:%s', oldcwd, oldusr, oldgrp)
         os.chdir(oldcwd)
-        os.seteuid(oldusr)
+        #os.seteuid(oldusr)
         #os.setegid(oldgrp)
         os.environ['LD_LIBRARY_PATH'] = oldenv
     return result
@@ -152,7 +153,7 @@ class Launcher(object):
             p.wait(timeout=timeout)
             retcode = p.returncode
         except Exception as e:
-            logging.error('run command exception:%s', str(e))
+            logging.error(f'run command exception:{traceback.print_exc(file=sys.stdout)}')
             msg = str(e)
             retcode = -1
             if not ignore_error:
