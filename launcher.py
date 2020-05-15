@@ -7,6 +7,7 @@ import logging
 import signal
 import ps_utils
 import daemon
+import traceback
 import datetime
 import subprocess
 from decorator import decorator
@@ -44,6 +45,7 @@ def set_working_dir(f, self):
         oldcwd = os.getcwd()
         oldusr = os.geteuid()
         oldgrp = os.getegid()
+        oldenv = os.environ['LD_LIBRARY_PATH']
         curgid = -1
         os.chdir(self.work_dir)
         work_usr = pwd.getpwnam(self.user)
@@ -64,6 +66,7 @@ def set_working_dir(f, self):
         os.chdir(oldcwd)
         os.seteuid(oldusr)
         #os.setegid(oldgrp)
+        os.environ['LD_LIBRARY_PATH'] = oldenv
     return result
 
 class Launcher(object):
@@ -188,9 +191,11 @@ class Launcher(object):
             result.append(self.run_cmd(self.post_start_cmd, self.ignore_post_start_error))
             return result
         except RuntimeError as e:
+            logging.error(f'start RuntimeError:{traceback.print_exc(file=sys.stdout)}')
             result.append(e.args[0])
             return result
         except Exception as e:
+            logging.error(f'start Exception:{traceback.print_exc(file=sys.stdout)}')
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
             return result
             
@@ -205,8 +210,10 @@ class Launcher(object):
             cur_cmd = self.post_stop_cmd
             result.append(self.run_cmd(self.post_stop_cmd, self.ignore_post_stop_error))
         except RuntimeError as e:
+            logging.error(f'stop RuntimeError:{traceback.print_exc(file=sys.stdout)}')
             result.append(e.args[0])
         except Exception as e:
+            logging.error(f'stop Exception:{traceback.print_exc(file=sys.stdout)}')
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
         finally:
             return result
@@ -227,9 +234,10 @@ class Launcher(object):
             status_result = self.run_cmd(self.status_cmd)
             result.append(status_result)
         except RuntimeError as e:
+            logging.error(f'status RuntimeError:{traceback.print_exc(file=sys.stdout)}')
             result.append(e.args[0])
         except Exception as e:
-            logging.error('do_status exception:%s', str(e))
+            logging.error(f'status Exception:{traceback.print_exc(file=sys.stdout)}')
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
         finally:
             return result

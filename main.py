@@ -69,6 +69,7 @@ class LauncherServer(socketserver.StreamRequestHandler):
                             result = launcher.format_result(result)
                     except Exception as e:
                         result += str(e)
+                        logging.error(f'main exception:{str(e)}')
             
             #result += '\n'    
             result = result.encode('utf-8')
