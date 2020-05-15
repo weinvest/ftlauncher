@@ -3,10 +3,17 @@ import json
 import logging
 from launcher import *
 class Loader(object):
-    def __init__(self):
+    def __init__(self, dconn):
         self.launchers = {}
         self.last_update_times = {}
         self.home_root = '/home'
+        self.logger = logging.getLogger()
+
+        self.logf = logging.FileHandler('ftlauncher.log', mode='w')
+        self.logf.setLevel(logging.DEBUG)
+        self.logger.addHandler(self.logf)
+        self.dconn = dconn
+
     
     def get_launcher(self, launcher_name, user = None):
         if launcher_name not in self.launchers:
@@ -21,7 +28,7 @@ class Loader(object):
         elif 1 == len(launchers):
             return list(launchers.values())[0]
         else:
-            logging.error('ambiguous launchers found with name %s for users: %s'
+            self.logger.error('ambiguous launchers found with name %s for users: %s'
                 , launcher_name
                 , ''.join([u for u in launchers.keys()]))
             return None
@@ -37,12 +44,12 @@ class Loader(object):
             conf_file = open(conf_file_name, 'r')
             conf = json.load(conf_file)
         except Exception as e:
-            logging.warn('open conf file %s failed: %s', conf_file_name, str(e))
+            self.logger.warn('open conf file %s failed: %s', conf_file_name, str(e))
             return
             
         workdir = conf['work_dir']
         if os.path.exists(workdir):
-            logging.warn("cann't find workdir for %s/%s:%s, ignore it's configure"
+            self.logger.warn("cann't find workdir for %s/%s:%s, ignore it's configure"
                 , user
                 , launcher_name
                 , workdir)
@@ -50,13 +57,19 @@ class Loader(object):
         
         start_cmd = conf.get('start_cmd', None)
         if 0 == len(start_cmd):
-            logging.warn("not start_cmd found for %s/%s, ignore it's configure"
+            self.logger.warn("not start_cmd found for %s/%s, ignore it's configure"
                 , user
                 , launcher_name)
             return
             
+        out_dir = conf.get('out_dir', None)
         exe_name = start_cmd.split()[0]
-        launcher = Launcher(user, launcher_name, os.path.join(self.home_root, user), workdir)
+        launcher = Launcher(user,
+            launcher_name,
+            os.path.join(self.home_root, user),
+            workdir,
+            out_dir,
+            self.dconn)
         launcher.set_start_command(start_cmd
             , conf.get('pre_start_cmd', None)
             , conf.get('post_start_cmd', None)
@@ -78,18 +91,20 @@ class Loader(object):
         dependence_names = conf.get('dependences', '')
         launcher.dependence_names = dependence_names.split()
         self.add_launcher(user, launcher)
-        logging.info('load launcher %s success', launcher_name)
+        self.logger.info('load launcher %s success', launcher_name)
         
     def load_4_user(self, user):
         conf_dir_4_user = '.ftapp.conf'
         if not os.path.exists(conf_dir_4_user):
             return
-        logging.info('load_4_user {0}'.format(user))
+
+        self.logger.info('load_4_user {0}'.format(user))
         try:
             oldcwd = os.getcwd()
             os.chdir(conf_dir_4_user)
             
             conf_files = os.listdir('.')
+            self.logger.info(f'{user} have configured:{conf_files}')
             for conf in conf_files:
                 last_update_time = os.path.getmtime(conf)
                 launcher_name, conf_ext = os.path.splitext(conf)
@@ -97,7 +112,7 @@ class Loader(object):
                    continue
                 
                 try:
-                    print('load {0}'.format(launcher_name))
+                    self.logger.info('loading launcher {0}'.format(launcher_name))
                     full_name = '{0}/{1}'.format(user, launcher_name)
                     launcher = self.get_launcher(launcher_name, user)
                     lan_last_update_time = self.last_update_times.get(full_name, 0)
@@ -107,8 +122,7 @@ class Loader(object):
                         self.last_update_times[full_name] = lan_last_update_time
                         self.load_one(user, conf)
                 except Exception as e:
-                    print(str(e))
-                    logging.error("load launcher %s/%s failed, detail:%s", user, launcher_name, str(e))
+                    self.logger.error("load launcher %s/%s failed, detail:%s", user, launcher_name, str(e))
         finally:
             os.chdir(oldcwd)
         
@@ -146,7 +160,6 @@ class Loader(object):
                 
     def list(self, user=None):
         result = []
-        print(len(self.launchers))
         for launcher_name, launchers in self.launchers.items():
             for user1, launcher in launchers.items():
                 if user is None or user == user1:

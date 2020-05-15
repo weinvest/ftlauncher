@@ -45,10 +45,10 @@ try:
                 output = step[u'message']
                 print(output)
         except Exception as e:
-            print(result[:-1])
+            print(result[:])
             print(str(e))
     else:
-        print(result[:-1])
+        print(result[:])
 except Exception as e:
     print('hhh')
     print('exception ' + str(e))

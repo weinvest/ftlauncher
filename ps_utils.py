@@ -17,6 +17,30 @@ def pid_exists(pid):
     else:
         return True
 
+def get_pid(pid_file_name):
+    if os.path.exists( pid_file_name):
+        try:
+            f = open(pid_file_name, 'r')
+            pid = int(f.read())
+        except Exception:
+            return 0
+        finally:
+            f.close()
+            
+        try:
+            os.kill(pid, 0)
+        except OSError as why:
+            if why.errno == errno.ESRCH:
+                # The pid doesnt exists.
+                os.remove(pid_file_name)
+            return 0
+        except Exception as e:
+            print(str(e))
+            return 0
+        else:
+            return pid
+    return 0
+
 def wait_pid(pid, timeout=None):
     """Wait for process with pid 'pid' to terminate and return its
     exit status code as an integer.

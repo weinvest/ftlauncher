@@ -3,6 +3,9 @@ import socketserver
 import loader
 import sys
 import time
+import logging
+import dlauncher
+from multiprocessing import Process, Pipe
 class LauncherServer(socketserver.StreamRequestHandler):
     def __init__(self, *args, **kargs):
         super(LauncherServer, self).__init__(*args, **kargs)
@@ -17,18 +20,19 @@ class LauncherServer(socketserver.StreamRequestHandler):
         self.usage = '\n    '.join(self.usage)
 
         super(LauncherServer,  self).setup()
-        self.loader = loader.Loader()
+        self.loader = loader.Loader(self.server.dconn)
         self.load()
         
     def load(self):
+        logging.info('start to load configures')
         self.last_load_time = time.time()
         self.loader.load()
         self.loader.resolve()
         
     def handle(self):
-        elpased = time.time()-self.last_load_time
-        if elpased > 60:
-            self.load()
+        # elpased = time.time()-self.last_load_time
+        # if elpased > 60:
+        #     self.load()
             
         commands = self.rfile.readline().strip().decode()
         commands = commands.split()
@@ -76,12 +80,18 @@ if __name__ == '__main__':
     if 3 != len(sys.argv):
         print('usage:ftlauncher host port')
         sys.exit(-1)
-    
+    parent_conn, child_conn = Pipe()
+    dprocess = Process(target=dlauncher.run, args=(child_conn,))
+    dprocess.start()
+
     host = sys.argv[1]
     port = int(sys.argv[2])
+    logging.basicConfig(level = logging.DEBUG)
+
     with socketserver.TCPServer((host, port), LauncherServer) as server:
         # Activate the server; this will keep running until you
         # interrupt the program with Ctrl-C
+        server.dconn = parent_conn
         server.allow_reuse_address = True
         server.serve_forever()
         
