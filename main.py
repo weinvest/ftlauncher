@@ -26,7 +26,8 @@ class LauncherServer(socketserver.StreamRequestHandler):
     def load(self):
         logging.info('start to load configures')
         self.last_load_time = time.time()
-        self.loader.load()
+        self.loader.load('/root')
+        self.loader.load('/home')
         self.loader.resolve()
         
     def handle(self):
@@ -39,7 +40,7 @@ class LauncherServer(socketserver.StreamRequestHandler):
         if 0 == len(commands):
             self.wfile.write(self.usage)
         else:
-            if 'ls' == commands[0]:
+            if commands[0] in ['ls', 'list']:
                 user = None if 1 == len(commands) else commands[1]
                 result = self.loader.list(user)
                 result = '\n'.join(result)

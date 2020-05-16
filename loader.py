@@ -39,7 +39,7 @@ class Loader(object):
         else:
             self.launchers[launcher.name][user] = launcher
         
-    def load_one(self, user, launcher_name, conf_file_name):
+    def load_one(self, user, launcher_name, conf_file_name, home_root):
         try:
             conf_file = open(conf_file_name, 'r')
             conf = json.load(conf_file)
@@ -66,7 +66,7 @@ class Loader(object):
         exe_name = start_cmd.split()[0]
         launcher = Launcher(user,
             launcher_name,
-            os.path.join(self.home_root, user),
+            os.path.join(home_root, user),
             workdir,
             out_dir,
             self.dconn)
@@ -95,7 +95,7 @@ class Loader(object):
         self.add_launcher(user, launcher)
         self.logger.info('load launcher %s success', launcher_name)
         
-    def load_4_user(self, user):
+    def load_4_user(self, user, home_root):
         conf_dir_4_user = '.ftapp.conf'
         if not os.path.exists(conf_dir_4_user):
             return
@@ -119,22 +119,22 @@ class Loader(object):
                     launcher = self.get_launcher(launcher_name, user)
                     lan_last_update_time = self.last_update_times.get(full_name, 0)
                     if launcher is None:
-                        self.load_one(user, launcher_name, conf)
-                    elif last_update_time < lan_last_update_time:
-                        self.last_update_times[full_name] = lan_last_update_time
-                        self.load_one(user, conf)
+                        self.load_one(user, launcher_name, conf, home_root)
+                    elif last_update_time > lan_last_update_time:
+                        self.last_update_times[full_name] = last_update_time
+                        self.load_one(user, launcher_name, conf, home_root)
                 except Exception as e:
                     self.logger.error("load launcher %s/%s failed, detail:%s", user, launcher_name, str(e))
         finally:
             os.chdir(oldcwd)
         
-    def load(self):
-        users = os.listdir(self.home_root)
+    def load(self, home_root):
+        users = os.listdir(home_root)
         for user in users:
             oldcwd = os.getcwd()
             try:
-                os.chdir(os.path.join(self.home_root, user))
-                self.load_4_user(user)
+                os.chdir(os.path.join(home_root, user))
+                self.load_4_user(user, home_root)
             finally:
                 os.chdir(oldcwd)
                 
