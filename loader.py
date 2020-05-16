@@ -48,7 +48,8 @@ class Loader(object):
             return
             
         workdir = conf['work_dir']
-        if os.path.exists(workdir):
+        workdir = workdir.replace('~',  f'{home_root}/{user}') 
+        if not os.path.exists(workdir):
             self.logger.warn("cann't find workdir for %s/%s:%s, ignore it's configure"
                 , user
                 , launcher_name
@@ -131,13 +132,17 @@ class Loader(object):
     def load(self, home_root):
         users = os.listdir(home_root)
         for user in users:
-            oldcwd = os.getcwd()
-            try:
-                os.chdir(os.path.join(home_root, user))
-                self.load_4_user(user, home_root)
-            finally:
-                os.chdir(oldcwd)
-                
+            home = os.path.join(home_root, user)
+            self.load_user(user, home, home_root)
+
+    def load_user(self, user, home, home_root):
+        oldcwd = os.getcwd()
+        try:
+            os.chdir(home)
+            self.load_4_user(user, home_root)
+        finally:
+            os.chdir(oldcwd)       
+
     def split_launcher_name(self, full_name):
         user = None
         dep_name = full_name
