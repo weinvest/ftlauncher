@@ -96,7 +96,9 @@ class Launcher(object):
         , pre_start_cmd=None
         , post_start_cmd=None
         , ignore_pre_error=False
-        , ignore_post_error=False):
+        , ignore_post_error=False
+        , pre_start_as_daemon=False
+        , post_start_as_daemon=False):
         self.start_cmd = self.normalize_path(cmd)
         if -1 == self.start_cmd.find('-n'):
             self.start_cmd += ' -n ' + self.name
@@ -116,6 +118,8 @@ class Launcher(object):
         self.post_start_cmd = self.normalize_path(post_start_cmd)
         self.ignore_pre_start_error = ignore_pre_error
         self.ignore_post_start_error = ignore_post_error
+        self.pre_start_as_daemon = pre_start_as_daemon
+        self.post_start_as_daemon = post_start_as_daemon
     
     def set_stop_command(self
         , cmd
@@ -148,12 +152,15 @@ class Launcher(object):
             work_dir = os.path.dirname(args[0])
             work_dir = work_dir if 0 != len(work_dir) else self.work_dir
             set_environ(work_dir)
-                
-            p = subprocess.Popen(cmd, stdout=out, stderr=out, cwd=work_dir, shell=True,  env=os.environ, close_fds=True)
+            logging.info(f'exec cmd:{cmd}')
+            p = subprocess.Popen(['su', self.user, '-lc', cmd], 
+                stdout=out, stderr=out, cwd=work_dir, shell=False,
+                env=os.environ, close_fds=True)
             p.wait(timeout=timeout)
             retcode = p.returncode
         except Exception as e:
-            logging.error(f'run command exception:{traceback.print_exc(file=sys.stdout)}')
+            logging.error(f'run command exception:{cmd}')
+            traceback.print_exc(file=sys.stdout)
             msg = str(e)
             retcode = -1
             if not ignore_error:
@@ -167,10 +174,13 @@ class Launcher(object):
         cmd_status = CommandStatus(cmd, retcode, msg)
         return cmd_status
         
-    def run_as_daemon(self, cmd, timeout=1.0):
+    def run_as_daemon(self, cmd, ignore_error, timeout=1.0):
         self.dconn.send([cmd, self.user, self.work_dir, self.out_dir, self.name, timeout])
         retcode, msg = self.dconn.recv()
-        return CommandStatus(cmd, retcode, msg)
+        if ignore_error or 0 == retcode:
+            return CommandStatus(cmd, retcode, msg)
+        else:
+            raise RuntimeError(CommandStatus(cmd, retcode, msg))
 
     @set_working_dir        
     def do_start(self):
@@ -185,18 +195,24 @@ class Launcher(object):
                 return [CommandStatus(self.start_cmd, -1, 'unresoloved')]
 
             cur_cmd = self.pre_start_cmd
-            result.append(self.run_cmd( self.pre_start_cmd, self.ignore_pre_start_error))
+            run_pre_cmd = self.run_cmd if not self.pre_start_as_daemon else self.run_as_daemon
+            pre_result = run_pre_cmd(self.pre_start_cmd, self.ignore_pre_start_error)
+            result.append(pre_result)
             cur_cmd = self.start_cmd
-            result.append(self.run_as_daemon(self.start_cmd))
+            result.append(self.run_as_daemon(self.start_cmd, False))
             cur_cmd = self.post_start_cmd
-            result.append(self.run_cmd(self.post_start_cmd, self.ignore_post_start_error))
+            run_post_cmd = self.run_cmd if not self.post_start_as_daemon else self.run_as_daemon
+            post_result = run_post_cmd(self.post_start_cmd, self.ignore_post_start_error)
+            result.append(post_result)
             return result
         except RuntimeError as e:
-            logging.error(f'start RuntimeError:{traceback.print_exc(file=sys.stdout)}')
+            logging.error(f'start RuntimeError:{cur_cmd}')
+            traceback.print_exc(file=sys.stdout)
             result.append(e.args[0])
             return result
         except Exception as e:
-            logging.error(f'start Exception:{traceback.print_exc(file=sys.stdout)}')
+            logging.error(f'start Exception:{cur_cmd}')
+            traceback.print_exc(file=sys.stdout)
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
             return result
             
@@ -211,10 +227,12 @@ class Launcher(object):
             cur_cmd = self.post_stop_cmd
             result.append(self.run_cmd(self.post_stop_cmd, self.ignore_post_stop_error))
         except RuntimeError as e:
-            logging.error(f'stop RuntimeError:{traceback.print_exc(file=sys.stdout)}')
+            logging.error(f'stop RuntimeError:{cur_cmd}')
+            traceback.print_exc(file=sys.stdout)
             result.append(e.args[0])
         except Exception as e:
-            logging.error(f'stop Exception:{traceback.print_exc(file=sys.stdout)}')
+            logging.error(f'stop Exception:{cur_cmd}')
+            traceback.print_exc(file=sys.stdout)
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
         finally:
             return result
@@ -235,10 +253,12 @@ class Launcher(object):
             status_result = self.run_cmd(self.status_cmd)
             result.append(status_result)
         except RuntimeError as e:
-            logging.error(f'status RuntimeError:{traceback.print_exc(file=sys.stdout)}')
+            logging.error(f'status RuntimeError:{cur_cmd}')
+            traceback.print_exc(file=sys.stdout)
             result.append(e.args[0])
         except Exception as e:
-            logging.error(f'status Exception:{traceback.print_exc(file=sys.stdout)}')
+            logging.error(f'status Exception:{cur_cmd}')
+            traceback.print_exc(file=sys.stdout)
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
         finally:
             return result

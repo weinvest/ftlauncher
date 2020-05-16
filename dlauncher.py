@@ -29,18 +29,14 @@ class EmptyCls(object):
 @set_working_dir
 def run_daemon(ctx):
     cmd, out_dir, name, timeout = ctx.req
-    pid_file_name = f'/tmp/{name}.pid'
-    exe_dir, exe_path, exe_name = split_exe_info(cmd.split()[0])
+    pid_file_name = f'/tmp/.{name}.pid'
 
     child_pid = os.fork()
     if 0 == child_pid:
         try:
             os.close(ctx.conn.fileno())
-            #print(os.environ['LD_LIBRARY_PATH'])
             daemon.daemonize(pid_file_name)
             signal.signal(signal.SIGHUP, signal.SIG_IGN)
-
-            os.chdir(exe_dir)
 
             stdout_file = f'{out_dir}/{name}.{os.getpid()}'
 
@@ -50,20 +46,15 @@ def run_daemon(ctx):
             sys.stdout = open(stdout_file,'w')
             sys.stderr = open(stdout_file,'w')
 
-            args = cmd.split()
+            args = ['su', ctx.user, '-lc', f'cd {ctx.work_dir} && '+cmd]
             envs = {'LD_LIBRARY_PATH': os.environ["LD_LIBRARY_PATH"]}
 
-            f = open('/tmp/alpha.out', 'w')
-            f.write(f'{exe_path}\n')
-            f.write(f'{args}\n')
-            f.write(f'{envs}\n')
-            f.close()
+            os.execvpe(args[0], args, env=envs)
 
-            os.execve(exe_path, args, env=envs)
-
-        except Exception as ex:
+        except Exception:
             pid = child_pid if 0 != child_pid else os.getpid()
-            sys.stdout.write(f'{datetime.datetime.now().isoformat()} {exe_name} exception, pid is: {pid}, detail: {ex}\n')
+            sys.stdout.write(f'{datetime.datetime.now().isoformat()} run {cmd} exception, pid is: {pid}, detail:\n')
+            traceback.print_exc(file=sys.stdout)
             sys.stdout.flush()
             if os.path.exists(pid_file_name):
                 os.remove(pid_file_name)
@@ -77,14 +68,14 @@ def run_daemon(ctx):
             try:
                 out_file_name = os.path.join(out_dir, f'{out_dir}/{name}.{pid}')
                 f = open(out_file_name, 'r')
-                msg = [str(s) for s in f.readlines()]
+                msg = ''.join([str(s) for s in f.readlines()])
             except Exception as e:
                 retcode=2
                 msg = str(e)
 
             return [retcode, msg]
         else:
-            return [3, "can't read pid from pidfile"]
+            return [3, f"can't read pid from {pid_file_name}"]
 
 def run(conn):
     while True:
