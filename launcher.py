@@ -6,7 +6,6 @@ import errno
 import logging
 import signal
 import ps_utils
-import daemon
 import traceback
 import datetime
 import subprocess
@@ -96,9 +95,7 @@ class Launcher(object):
         , pre_start_cmd=None
         , post_start_cmd=None
         , ignore_pre_error=False
-        , ignore_post_error=False
-        , pre_start_as_daemon=False
-        , post_start_as_daemon=False):
+        , ignore_post_error=False):
         self.start_cmd = self.normalize_path(cmd)
         if -1 == self.start_cmd.find('-n'):
             self.start_cmd += ' -n ' + self.name
@@ -118,8 +115,6 @@ class Launcher(object):
         self.post_start_cmd = self.normalize_path(post_start_cmd)
         self.ignore_pre_start_error = ignore_pre_error
         self.ignore_post_start_error = ignore_post_error
-        self.pre_start_as_daemon = pre_start_as_daemon
-        self.post_start_as_daemon = post_start_as_daemon
     
     def set_stop_command(self
         , cmd
@@ -141,7 +136,7 @@ class Launcher(object):
         self.dependences.append(launcher)
                 
     def run_cmd(self, cmd, ignore_error=False, timeout=5):
-        if cmd is None:
+        if cmd is None or 0 == len(cmd):
             return CommandStatus('', 0, 'no command execed')
   
         import tempfile
@@ -195,15 +190,18 @@ class Launcher(object):
                 return [CommandStatus(self.start_cmd, -1, 'unresoloved')]
 
             cur_cmd = self.pre_start_cmd
-            run_pre_cmd = self.run_cmd if not self.pre_start_as_daemon else self.run_as_daemon
-            pre_result = run_pre_cmd(self.pre_start_cmd, self.ignore_pre_start_error)
-            result.append(pre_result)
+            if cur_cmd is not None and 0 != len(cur_cmd):
+                pre_result = self.run_cmd(self.pre_start_cmd, self.ignore_pre_start_error)
+                result.append(pre_result)
+
             cur_cmd = self.start_cmd
-            result.append(self.run_as_daemon(self.start_cmd, False))
+            if cur_cmd is not None and 0 != len(cur_cmd):
+                result.append(self.run_as_daemon(self.start_cmd, False))
+
             cur_cmd = self.post_start_cmd
-            run_post_cmd = self.run_cmd if not self.post_start_as_daemon else self.run_as_daemon
-            post_result = run_post_cmd(self.post_start_cmd, self.ignore_post_start_error)
-            result.append(post_result)
+            if cur_cmd is not None and 0 != len(cur_cmd):
+                post_result = self.run_cmd(self.post_start_cmd, self.ignore_post_start_error)
+                result.append(post_result)
             return result
         except RuntimeError as e:
             logging.error(f'start RuntimeError:{cur_cmd}')
@@ -221,11 +219,16 @@ class Launcher(object):
         result = []
         try:
             cur_cmd = self.pre_stop_cmd
-            result.append(self.run_cmd(self.pre_stop_cmd, self.ignore_pre_stop_error))
+            if cur_cmd is not None and 0 != len(cur_cmd):
+                result.append(self.run_cmd(self.pre_stop_cmd, self.ignore_pre_stop_error))
+
             cur_cmd = self.stop_cmd
-            result.append(self.run_cmd(self.stop_cmd))
+            if cur_cmd is not None and 0 != len(cur_cmd):
+                result.append(self.run_cmd(self.stop_cmd))
+
             cur_cmd = self.post_stop_cmd
-            result.append(self.run_cmd(self.post_stop_cmd, self.ignore_post_stop_error))
+            if cur_cmd is not None and 0 != len(cur_cmd):
+                result.append(self.run_cmd(self.post_stop_cmd, self.ignore_post_stop_error))
         except RuntimeError as e:
             logging.error(f'stop RuntimeError:{cur_cmd}')
             traceback.print_exc(file=sys.stdout)

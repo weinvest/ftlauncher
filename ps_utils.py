@@ -20,12 +20,14 @@ def pid_exists(pid):
 def get_pid(pid_file_name):
     if os.path.exists( pid_file_name):
         try:
+            f = None
             f = open(pid_file_name, 'r')
             pid = int(f.read())
         except Exception:
             return 0
         finally:
-            f.close()
+            if f is not None:
+                f.close()
             
         try:
             os.kill(pid, 0)
@@ -103,3 +105,67 @@ def wait_pid(pid, timeout=None):
             else:
                 # should never happen
                 raise RuntimeError("unknown process exit status")
+
+# copy and modify from  daemon because it has bug
+import os
+import sys
+import errno
+
+def basic_daemonize():
+    # See http://www.erlenstar.demon.co.uk/unix/faq_toc.html#TOC16
+    if os.fork():   # launch child and...
+        os._exit(0) # kill off parent
+    os.setsid()
+    if os.fork():   # launch child and...
+        os._exit(0) # kill off parent again.
+    os.umask(0o22)   # Don't allow others to write
+    null=os.open('/dev/null', os.O_RDWR)
+    for i in range(3):
+        try:
+            os.dup2(null, i)
+        except OSError as e:
+            if e.errno != errno.EBADF:
+                raise
+    os.close(null)
+
+
+def writePID(pidfile):
+    try:
+        f = open(pidfile,'w')
+        pid = os.getpid()
+        pid = str(pid)
+        f.write(pid)
+    finally:
+        f.close()
+    if not os.path.exists(pidfile):
+        raise Exception( "pidfile %s does not exist" % pidfile )
+
+
+def checkPID(pidfile):
+    if not pidfile:
+        return
+    if os.path.exists(pidfile):
+        try:
+            f = open(pidfile, 'r')
+            pid = int(f.read())
+        except ValueError:
+            sys.exit('Pidfile %s contains non-numeric value' % pidfile)
+        finally:
+            f.close()
+        try:
+            os.kill(pid, 0)
+        except OSError as why:
+            if why[0] == errno.ESRCH:
+                # The pid doesnt exists.
+                print(('Removing stale pidfile %s' % pidfile))
+                os.remove(pidfile)
+            else:
+                sys.exit("Can't check status of PID %s from pidfile %s: %s" %
+                         (pid, pidfile, why[1]))
+        else:
+            sys.exit("Another server is running, PID %s\n" %  pid)
+
+def daemonize(pidfile):
+    checkPID(pidfile)
+    basic_daemonize()
+    writePID(pidfile)

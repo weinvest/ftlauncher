@@ -64,7 +64,6 @@ class Loader(object):
             return
             
         out_dir = conf.get('out_dir', None)
-        exe_name = start_cmd.split()[0]
         launcher = Launcher(user,
             launcher_name,
             os.path.join(home_root, user),
@@ -76,8 +75,6 @@ class Loader(object):
             , conf.get('post_start_cmd', None)
             , conf.get('ignore_pre_start_error', False)
             , conf.get('ignore_post_start_error', False)
-            , conf.get('pre_start_as_daemon', False)
-            , conf.get('post_start_as_daemon', False)
             )
 
         default_stop_cmd = f"ps aux|grep -h {launcher.cmd_user} | grep -Evh 'grep|ftlauncher|su|sshd' | awk '{{print $2}}'|xargs -n 1 -I p kill p"
@@ -156,10 +153,11 @@ class Loader(object):
             for user, launcher in launchers.items():
                 is_resoloved = True
                 for dependence_name in launcher.dependence_names:
-                    user, dep_name = self.split_launcher_name(dependence_name)
-                    dep_launcher = self.get_launcher(dep_name, user)
+                    dep_user, dep_name = self.split_launcher_name(dependence_name)
+                    dep_launcher = self.get_launcher(dep_name, dep_user)
                     
                     if dep_launcher is not None:
+                        logging.info(f"resolove {user}/{launcher.name}'s depency {dep_user}/{dependence_name}")
                         launcher.add_dependence(dep_launcher)
                     else:
                         is_resoloved = False

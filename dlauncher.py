@@ -4,7 +4,6 @@ import pwd
 import time
 import signal
 import ps_utils
-import daemon
 import traceback
 import datetime
 from launcher import set_working_dir
@@ -35,7 +34,7 @@ def run_daemon(ctx):
     if 0 == child_pid:
         try:
             os.close(ctx.conn.fileno())
-            daemon.daemonize(pid_file_name)
+            ps_utils.daemonize(pid_file_name)
             signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
             stdout_file = f'{out_dir}/{name}.{os.getpid()}'
@@ -45,6 +44,9 @@ def run_daemon(ctx):
 
             sys.stdout = open(stdout_file,'w')
             sys.stderr = open(stdout_file,'w')
+            
+            work_usr = pwd.getpwnam(ctx.user)
+            os.chown(stdout_file, work_usr.pw_uid, work_usr.pw_gid)
 
             args = ['su', ctx.user, '-lc', f'cd {ctx.work_dir} && '+cmd]
             envs = {'LD_LIBRARY_PATH': os.environ["LD_LIBRARY_PATH"]}
@@ -56,8 +58,6 @@ def run_daemon(ctx):
             sys.stdout.write(f'{datetime.datetime.now().isoformat()} run {cmd} exception, pid is: {pid}, detail:\n')
             traceback.print_exc(file=sys.stdout)
             sys.stdout.flush()
-            if os.path.exists(pid_file_name):
-                os.remove(pid_file_name)
         finally:
             sys.exit(0)
     else:
