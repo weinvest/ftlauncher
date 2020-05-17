@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import pwd
 import time
@@ -29,7 +30,7 @@ class EmptyCls(object):
 def run_daemon(ctx):
     cmd, out_dir, name, timeout = ctx.req
     pid_file_name = f'/tmp/.{name}.pid'
-
+    start_time = datetime.datetime.now().timestamp()
     child_pid = os.fork()
     if 0 == child_pid:
         try:
@@ -63,6 +64,20 @@ def run_daemon(ctx):
     else:
         time.sleep(timeout)
         pid = ps_utils.get_pid(pid_file_name)
+        if 0 == pid:
+            now = datetime.datetime.now().timestamp()
+            files = os.listdir(out_dir)
+            for f in files:
+                fname, fext = os.path.splitext(f)
+                m = re.match('\.(\d+)', fext)
+                if fname == name and m is not None:
+                    full_path = os.path.join(out_dir, f)
+                    mtime = os.path.getmtime(full_path)
+                    if mtime >= start_time and mtime < now:
+                        pid = 
+
+
+
         if 0 != pid:
             retcode = 0
             try:
