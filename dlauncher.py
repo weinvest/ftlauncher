@@ -74,9 +74,7 @@ def run_daemon(ctx):
                     full_path = os.path.join(out_dir, f)
                     mtime = os.path.getmtime(full_path)
                     if mtime >= start_time and mtime < now:
-                        pid = 
-
-
+                        pid = int(m.group(1))
 
         if 0 != pid:
             retcode = 0

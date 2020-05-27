@@ -5,7 +5,6 @@ from launcher import *
 class Loader(object):
     def __init__(self, dconn):
         self.launchers = {}
-        self.last_update_times = {}
         self.home_root = '/home'
         self.logger = logging.getLogger()
 
@@ -39,34 +38,27 @@ class Loader(object):
         else:
             self.launchers[launcher.name][user] = launcher
         
-    def load_one(self, user, launcher_name, conf_file_name, home_root):
-        try:
-            conf_file = open(conf_file_name, 'r')
-            conf = json.load(conf_file)
-        except Exception as e:
-            self.logger.warn('open conf file %s failed: %s', conf_file_name, str(e))
-            return
-            
+    def load_one(self, user, launcher_name, conf, home):      
         workdir = conf['work_dir']
-        workdir = workdir.replace('~',  f'{home_root}/{user}') 
+        workdir = workdir.replace('~',  home) 
         if not os.path.exists(workdir):
             self.logger.warn("cann't find workdir for %s/%s:%s, ignore it's configure"
                 , user
                 , launcher_name
                 , workdir)
-            return
+            return None
         
-        start_cmd = conf.get('start_cmd', None)
-        if 0 == len(start_cmd):
+        start_cmd = conf.get('start_cmd', '')
+        if 0 == len(start_cmd) and 'all' != launcher_name:
             self.logger.warn("not start_cmd found for %s/%s, ignore it's configure"
                 , user
                 , launcher_name)
-            return
+            return None
             
         out_dir = conf.get('out_dir', None)
         launcher = Launcher(user,
             launcher_name,
-            os.path.join(home_root, user),
+            home,
             workdir,
             out_dir,
             self.dconn)
@@ -88,55 +80,68 @@ class Loader(object):
         default_status_cmd = f"ps aux|grep -h {launcher.cmd_user} | grep -Evh 'grep|ftlauncher|su|sshd'"
         launcher.set_status_command(conf.get('status_cmd', default_status_cmd))
         
-        dependence_names = conf.get('dependences', '')
-        launcher.dependence_names = dependence_names.split()
+        dependence_names = conf.get('dependences', [])
+        launcher.dependence_names = dependence_names if isinstance(dependence_names, list) else dependence_names.split()
         self.add_launcher(user, launcher)
         self.logger.info('load launcher %s success', launcher_name)
+        return launcher
         
-    def load_4_user(self, user, home_root):
+    def load_4_user(self, user, home):
         conf_dir_4_user = '.ftapp.conf'
         if not os.path.exists(conf_dir_4_user):
             return
 
         self.logger.info('load_4_user {0}'.format(user))
         try:
+            user_all_launchers = []
             oldcwd = os.getcwd()
             os.chdir(conf_dir_4_user)
             
             conf_files = os.listdir('.')
             self.logger.info(f'{user} have configured:{conf_files}')
-            for conf in conf_files:
-                last_update_time = os.path.getmtime(conf)
-                launcher_name, conf_ext = os.path.splitext(conf)
+
+            for conf_file_name in conf_files:
+                launcher_name, conf_ext = os.path.splitext(conf_file_name)
                 if u'.json' != conf_ext:
                    continue
                 
                 try:
                     self.logger.info('loading launcher {0}'.format(launcher_name))
-                    full_name = '{0}/{1}'.format(user, launcher_name)
+                    full_name = f'{user}/{launcher_name}'
                     launcher = self.get_launcher(launcher_name, user)
-                    lan_last_update_time = self.last_update_times.get(full_name, 0)
-                    if launcher is None:
-                        self.load_one(user, launcher_name, conf, home_root)
-                    elif last_update_time > lan_last_update_time:
-                        self.last_update_times[full_name] = last_update_time
-                        self.load_one(user, launcher_name, conf, home_root)
+                    
+                    if launcher is not None:
+                        continue
+
+                    conf_file = open(conf_file_name, 'r')
+                    conf = json.load(conf_file)
+
+                    launcher = self.load_one(user, launcher_name, conf, home)
+                    user_all_launchers.append(full_name)
+
                 except Exception as e:
                     self.logger.error("load launcher %s/%s failed, detail:%s", user, launcher_name, str(e))
         finally:
+            if 0 != len(user_all_launchers):
+                user_all_conf = {"work_dir":"~", "dependences":user_all_launchers}
+                try:
+                    self.load_one(user, 'all', user_all_conf, home)
+                except Exception as e:
+                    self.logger.error(f"load launcher {user}/all failed, detail:{str(e)}")
+
             os.chdir(oldcwd)
         
     def load(self, home_root):
         users = os.listdir(home_root)
         for user in users:
             home = os.path.join(home_root, user)
-            self.load_user(user, home, home_root)
+            self.load_user(user, home)
 
-    def load_user(self, user, home, home_root):
+    def load_user(self, user, home):
         oldcwd = os.getcwd()
         try:
             os.chdir(home)
-            self.load_4_user(user, home_root)
+            self.load_4_user(user, home)
         finally:
             os.chdir(oldcwd)       
 
@@ -157,7 +162,7 @@ class Loader(object):
                     dep_launcher = self.get_launcher(dep_name, dep_user)
                     
                     if dep_launcher is not None:
-                        logging.info(f"resolove {user}/{launcher.name}'s depency {dep_user}/{dependence_name}")
+                        logging.info(f"resolove {user}/{launcher.name}'s depency {dependence_name}")
                         launcher.add_dependence(dep_launcher)
                     else:
                         is_resoloved = False
@@ -170,5 +175,6 @@ class Loader(object):
                 if user is None or user == user1:
                     result.append('{0}/{1}'.format(user1, launcher_name))
         
+        result = sorted(result)
         return result
         

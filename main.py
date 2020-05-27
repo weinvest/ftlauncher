@@ -26,7 +26,7 @@ class LauncherServer(socketserver.StreamRequestHandler):
     def load(self):
         logging.info('start to load configures')
         self.last_load_time = time.time()
-        self.loader.load_user('root', '/root', '/root')
+        self.loader.load_user('root', '/root')
         self.loader.load('/home')
         self.loader.resolve()
         
