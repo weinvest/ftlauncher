@@ -98,7 +98,7 @@ class Launcher(object):
         , ignore_post_error=False):
         self.start_cmd = self.normalize_path(cmd)
         if -1 == self.start_cmd.find('-n'):
-            self.start_cmd += ' -n ' + self.name
+            self.start_cmd += ' -n ' + self.name if 0 != len(self.start_cmd) else ''
             self.cmd_user = self.name
         else:
             cmds = self.start_cmd.split()
