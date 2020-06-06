@@ -82,6 +82,7 @@ class Launcher(object):
         self.dependence_names = []
         self.is_resoloved = False
         self.pid_file_name = '/tmp/.{0}.pid'.format(self.name)
+        self.is_help = False
     
     def normalize_path(self, p): 
         if p is None:
@@ -196,7 +197,11 @@ class Launcher(object):
 
             cur_cmd = self.start_cmd
             if cur_cmd is not None and 0 != len(cur_cmd):
-                result.append(self.run_as_daemon(self.start_cmd, False))
+                if self.is_help:
+                    cmd_result = self.run_cmd(cur_cmd, False)
+                else:
+                    cmd_result = self.run_as_daemon(self.start_cmd, False)
+                result.append(cmd_result)
 
             cur_cmd = self.post_start_cmd
             if cur_cmd is not None and 0 != len(cur_cmd):

@@ -62,6 +62,7 @@ class Loader(object):
             workdir,
             out_dir,
             self.dconn)
+        launcher.is_help = conf.get('is_help', False)
         launcher.set_start_command(start_cmd
             , conf.get('pre_start_cmd', None)
             , conf.get('post_start_cmd', None)
@@ -117,7 +118,8 @@ class Loader(object):
                     conf = json.load(conf_file)
 
                     launcher = self.load_one(user, launcher_name, conf, home)
-                    user_all_launchers.append(full_name)
+                    if not launcher.is_help:
+                        user_all_launchers.append(full_name)
 
                 except Exception as e:
                     self.logger.error("load launcher %s/%s failed, detail:%s", user, launcher_name, str(e))
