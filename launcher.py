@@ -98,14 +98,16 @@ class Launcher(object):
         , ignore_pre_error=False
         , ignore_post_error=False):
         self.start_cmd = self.normalize_path(cmd)
-        if -1 == self.start_cmd.find('-n'):
-            self.start_cmd += ' -n ' + self.name if 0 != len(self.start_cmd) else ''
-            self.cmd_user = self.name
+        if not self.is_help:
+            if -1 == self.start_cmd.find('-n'):
+                self.start_cmd += ' -n ' + self.name if 0 != len(self.start_cmd) else ''
+                self.cmd_user = self.name
+            else:
+                cmds = self.start_cmd.split()
+                idx = cmds.index('-n')
+                self.cmd_user = cmds[idx+1]        
         else:
-            cmds = self.start_cmd.split()
-            idx = cmds.index('-n')
-            self.cmd_user = cmds[idx+1]
-        
+            self.cmd_user = self.user
         #if not self.start_cmd.startswith('nohup'):
         #    self.start_cmd = 'nohup {0} '.format(self.start_cmd)
         
@@ -136,7 +138,7 @@ class Launcher(object):
     def add_dependence(self, launcher):
         self.dependences.append(launcher)
                 
-    def run_cmd(self, cmd, ignore_error=False, timeout=5):
+    def run_cmd(self, cmd, ignore_error=False, timeout=5, auto_work_dir=True):
         if cmd is None or 0 == len(cmd):
             return CommandStatus('', 0, 'no command execed')
   
@@ -145,11 +147,15 @@ class Launcher(object):
         msg = ''
         try:
             args = cmd.split()
-            work_dir = os.path.dirname(args[0])
-            work_dir = work_dir if 0 != len(work_dir) else self.work_dir
+            if auto_work_dir:
+                work_dir = os.path.dirname(args[0])
+                work_dir = work_dir if 0 != len(work_dir) else self.work_dir
+            else:
+                work_dir = self.work_dir
+
             set_environ(work_dir)
-            logging.info(f'exec cmd:{cmd}')
-            p = subprocess.Popen(['su', self.user, '-lc', cmd], 
+            logging.info(f'exec cmd:{cmd}, cwd:{work_dir}')
+            p = subprocess.Popen(['su', self.user, '-lc', f'cd {work_dir} && {cmd}'],
                 stdout=out, stderr=out, cwd=work_dir, shell=False,
                 env=os.environ, close_fds=True)
             p.wait(timeout=timeout)
@@ -198,7 +204,7 @@ class Launcher(object):
             cur_cmd = self.start_cmd
             if cur_cmd is not None and 0 != len(cur_cmd):
                 if self.is_help:
-                    cmd_result = self.run_cmd(cur_cmd, False)
+                    cmd_result = self.run_cmd(cur_cmd, False, auto_work_dir=False)
                 else:
                     cmd_result = self.run_as_daemon(self.start_cmd, False)
                 result.append(cmd_result)
