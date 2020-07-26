@@ -44,7 +44,7 @@ def set_working_dir(f, self):
         oldcwd = os.getcwd()
         oldusr = os.geteuid()
         oldgrp = os.getegid()
-        oldenv = os.environ['LD_LIBRARY_PATH']
+        oldenv = os.environ['LD_LIBRARY_PATH'] if 'LD_LIBRARY_PATH' in os.environ else ''
         curgid = -1
         os.chdir(self.work_dir)
         work_usr = pwd.getpwnam(self.user)
@@ -52,7 +52,7 @@ def set_working_dir(f, self):
         logging.info('change2 work_dir:%s, user:%s, gid:%d', self.work_dir, self.user, curgid)
         #os.seteuid(work_usr.pw_uid)
         #os.setegid(work_usr.pw_gid)
-        set_environ(self.work_dir)
+        #set_environ(self.work_dir)
     except Exception as e:
         result = [CommandStatus('chusr', -1, str(e))]
         logging.error('change2 (dir:%s, usr:%d, gid:%s)=>(dir:%s, usr:%s, gid:%s), exception:%s'
@@ -138,7 +138,7 @@ class Launcher(object):
     def add_dependence(self, launcher):
         self.dependences.append(launcher)
                 
-    def run_cmd(self, cmd, ignore_error=False, timeout=5, auto_work_dir=True):
+    def run_cmd(self, cmd, ignore_error=False, timeout=15, auto_work_dir=True):
         if cmd is None or 0 == len(cmd):
             return CommandStatus('', 0, 'no command execed')
   
@@ -153,7 +153,7 @@ class Launcher(object):
             else:
                 work_dir = self.work_dir
 
-            set_environ(work_dir)
+            #set_environ(work_dir)
             logging.info(f'exec cmd:{cmd}, cwd:{work_dir}')
             p = subprocess.Popen(['su', self.user, '-lc', f'cd {work_dir} && {cmd}'],
                 stdout=out, stderr=out, cwd=work_dir, shell=False,
@@ -161,7 +161,7 @@ class Launcher(object):
             p.wait(timeout=timeout)
             retcode = p.returncode
         except Exception as e:
-            logging.error(f'run command exception:{cmd}')
+            logging.error(f'run command exception:{cmd}, detail:{str(e)}')
             traceback.print_exc(file=sys.stdout)
             msg = str(e)
             retcode = -1
