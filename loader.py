@@ -6,11 +6,6 @@ class Loader(object):
     def __init__(self, dconn):
         self.launchers = {}
         self.home_root = '/home'
-        self.logger = logging.getLogger()
-
-        self.logf = logging.FileHandler('ftlauncher.log', mode='w')
-        self.logf.setLevel(logging.DEBUG)
-        self.logger.addHandler(self.logf)
         self.dconn = dconn
 
     
@@ -27,7 +22,7 @@ class Loader(object):
         elif 1 == len(launchers):
             return list(launchers.values())[0]
         else:
-            self.logger.error('ambiguous launchers found with name %s for users: %s'
+            logging.error('ambiguous launchers found with name %s for users: %s'
                 , launcher_name
                 , ''.join([u for u in launchers.keys()]))
             return None
@@ -42,7 +37,7 @@ class Loader(object):
         workdir = conf['work_dir']
         workdir = workdir.replace('~',  home) 
         if not os.path.exists(workdir):
-            self.logger.warn("cann't find workdir for %s/%s:%s, ignore it's configure"
+            logging.warn("cann't find workdir for %s/%s:%s, ignore it's configure"
                 , user
                 , launcher_name
                 , workdir)
@@ -50,7 +45,7 @@ class Loader(object):
         
         start_cmd = conf.get('start_cmd', '')
         if 0 == len(start_cmd) and 'all' != launcher_name:
-            self.logger.warn("not start_cmd found for %s/%s, ignore it's configure"
+            logging.warn("not start_cmd found for %s/%s, ignore it's configure"
                 , user
                 , launcher_name)
             return None
@@ -84,7 +79,7 @@ class Loader(object):
         dependence_names = conf.get('dependences', [])
         launcher.dependence_names = dependence_names if isinstance(dependence_names, list) else dependence_names.split()
         self.add_launcher(user, launcher)
-        self.logger.info('load launcher %s success', launcher_name)
+        logging.info('load launcher %s success', launcher_name)
         return launcher
         
     def load_4_user(self, user, home):
@@ -92,14 +87,14 @@ class Loader(object):
         if not os.path.exists(conf_dir_4_user):
             return
 
-        self.logger.info('load_4_user {0}'.format(user))
+        logging.info('load_4_user {0}'.format(user))
         try:
             user_all_launchers = []
             oldcwd = os.getcwd()
             os.chdir(conf_dir_4_user)
             
             conf_files = os.listdir('.')
-            self.logger.info(f'{user} have configured:{conf_files}')
+            logging.info(f'{user} have configured:{conf_files}')
 
             for conf_file_name in conf_files:
                 launcher_name, conf_ext = os.path.splitext(conf_file_name)
@@ -107,7 +102,7 @@ class Loader(object):
                    continue
                 
                 try:
-                    self.logger.info('loading launcher {0}'.format(launcher_name))
+                    logging.info('loading launcher {0}'.format(launcher_name))
                     full_name = f'{user}/{launcher_name}'
                     launcher = self.get_launcher(launcher_name, user)
                     
@@ -122,14 +117,14 @@ class Loader(object):
                         user_all_launchers.append(full_name)
 
                 except Exception as e:
-                    self.logger.error("load launcher %s/%s failed, detail:%s", user, launcher_name, str(e))
+                    logging.error("load launcher %s/%s failed, detail:%s", user, launcher_name, str(e))
         finally:
             if 0 != len(user_all_launchers):
                 user_all_conf = {"work_dir":"~", "dependences":user_all_launchers}
                 try:
                     self.load_one(user, 'all', user_all_conf, home)
                 except Exception as e:
-                    self.logger.error(f"load launcher {user}/all failed, detail:{str(e)}")
+                    logging.error(f"load launcher {user}/all failed, detail:{str(e)}")
 
             os.chdir(oldcwd)
         
