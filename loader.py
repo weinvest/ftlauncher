@@ -65,7 +65,7 @@ class Loader(object):
             , conf.get('ignore_post_start_error', False)
             )
 
-        default_stop_cmd = f"ps aux|grep -h {launcher.cmd_user} | grep -Evh 'grep|ftlauncher|su|sshd' | awk '{{print $2}}'|xargs -n 1 -I p kill p"
+        default_stop_cmd = f"ps aux|grep -h 'n {launcher.cmd_user}' | grep -Evh 'grep|ftlauncher|su|sshd' | awk '{{print $2}}'|xargs -n 1 -I p kill p"
         launcher.set_stop_command(conf.get('stop_cmd', default_stop_cmd)
             , conf.get('pre_stop_cmd', None)
             , conf.get('post_stop_cmd', None)
@@ -73,7 +73,7 @@ class Loader(object):
             , conf.get('ignore_post_stop_error', False)
             )
 
-        default_status_cmd = f"ps aux|grep -h {launcher.cmd_user} | grep -Evh 'grep|ftlauncher|su|sshd'"
+        default_status_cmd = f"ps aux|grep -h 'n {launcher.cmd_user}' | grep -Evh 'grep|ftlauncher|su|sshd'"
         launcher.set_status_command(conf.get('status_cmd', default_status_cmd))
         
         dependence_names = conf.get('dependences', [])
