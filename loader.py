@@ -8,11 +8,11 @@ class Loader(object):
         self.home_root = '/home'
         self.dconn = dconn
 
-    
+
     def get_launcher(self, launcher_name, user = None):
         if launcher_name not in self.launchers:
             return None
-        
+
         launchers = self.launchers[launcher_name]
         if user is not None:
             if user in launchers:
@@ -26,30 +26,30 @@ class Loader(object):
                 , launcher_name
                 , ''.join([u for u in launchers.keys()]))
             return None
-            
+
     def add_launcher(self, user, launcher):
         if launcher.name not in self.launchers:
             self.launchers[launcher.name] = {user: launcher}
         else:
             self.launchers[launcher.name][user] = launcher
-        
-    def load_one(self, user, launcher_name, conf, home):      
+
+    def load_one(self, user, launcher_name, conf, home):
         workdir = conf['work_dir']
-        workdir = workdir.replace('~',  home) 
+        workdir = workdir.replace('~',  home)
         if not os.path.exists(workdir):
             logging.warn("cann't find workdir for %s/%s:%s, ignore it's configure"
                 , user
                 , launcher_name
                 , workdir)
             return None
-        
+
         start_cmd = conf.get('start_cmd', '')
         if 0 == len(start_cmd) and 'all' != launcher_name:
             logging.warn("not start_cmd found for %s/%s, ignore it's configure"
                 , user
                 , launcher_name)
             return None
-            
+
         out_dir = conf.get('out_dir', None)
         launcher = Launcher(user,
             launcher_name,
@@ -65,7 +65,8 @@ class Loader(object):
             , conf.get('ignore_post_start_error', False)
             )
 
-        default_stop_cmd = f"ps aux|grep -h 'n {launcher.cmd_user}' | grep -Evh 'grep|ftlauncher|su|sshd' | awk '{{print $2}}'|xargs -n 1 -I p kill p"
+        get_pid_cmd = f"ps -eo pid,command | grep {launcher.cmd_user} | grep \"\-n\" | grep -v 'pid,command'| awk '{{print $1}}'|xargs -n 1 -I pp"
+        default_stop_cmd = f"{get_pid_cmd} kill pp"
         launcher.set_stop_command(conf.get('stop_cmd', default_stop_cmd)
             , conf.get('pre_stop_cmd', None)
             , conf.get('post_stop_cmd', None)
@@ -73,15 +74,15 @@ class Loader(object):
             , conf.get('ignore_post_stop_error', False)
             )
 
-        default_status_cmd = f"ps aux|grep -h 'n {launcher.cmd_user}' | grep -Evh 'grep|ftlauncher|su|sshd'"
+        default_status_cmd = f"{get_pid_cmd} ps -o pid,stat,time,command --no-headers  --pid pp"
         launcher.set_status_command(conf.get('status_cmd', default_status_cmd))
-        
+
         dependence_names = conf.get('dependences', [])
         launcher.dependence_names = dependence_names if isinstance(dependence_names, list) else dependence_names.split()
         self.add_launcher(user, launcher)
         logging.info('load launcher %s success', launcher_name)
         return launcher
-        
+
     def load_4_user(self, user, home):
         conf_dir_4_user = '.ftapp.conf'
         if not os.path.exists(conf_dir_4_user):
@@ -92,7 +93,7 @@ class Loader(object):
             user_all_launchers = []
             oldcwd = os.getcwd()
             os.chdir(conf_dir_4_user)
-            
+
             conf_files = os.listdir('.')
             logging.info(f'{user} have configured:{conf_files}')
 
@@ -100,12 +101,12 @@ class Loader(object):
                 launcher_name, conf_ext = os.path.splitext(conf_file_name)
                 if u'.json' != conf_ext:
                    continue
-                
+
                 try:
                     logging.info('loading launcher {0}'.format(launcher_name))
                     full_name = f'{user}/{launcher_name}'
                     launcher = self.get_launcher(launcher_name, user)
-                    
+
                     if launcher is not None:
                         continue
 
@@ -127,7 +128,7 @@ class Loader(object):
                     logging.error(f"load launcher {user}/all failed, detail:{str(e)}")
 
             os.chdir(oldcwd)
-        
+
     def load(self, home_root):
         users = os.listdir(home_root)
         for user in users:
@@ -140,16 +141,16 @@ class Loader(object):
             os.chdir(home)
             self.load_4_user(user, home)
         finally:
-            os.chdir(oldcwd)       
+            os.chdir(oldcwd)
 
     def split_launcher_name(self, full_name):
         user = None
         dep_name = full_name
         if '/' in str(full_name):
             user, dep_name = full_name.split('/')
-            
+
         return (user, dep_name)
-        
+
     def resolve(self):
         for launcher_name, launchers in self.launchers.items():
             for user, launcher in launchers.items():
@@ -157,21 +158,20 @@ class Loader(object):
                 for dependence_name in launcher.dependence_names:
                     dep_user, dep_name = self.split_launcher_name(dependence_name)
                     dep_launcher = self.get_launcher(dep_name, dep_user)
-                    
+
                     if dep_launcher is not None:
                         logging.info(f"resolove {user}/{launcher.name}'s depency {dependence_name}")
                         launcher.add_dependence(dep_launcher)
                     else:
                         is_resoloved = False
                 launcher.is_resoloved = is_resoloved
-                
+
     def list(self, user=None):
         result = []
         for launcher_name, launchers in self.launchers.items():
             for user1, launcher in launchers.items():
                 if user is None or user == user1:
                     result.append('{0}/{1}'.format(user1, launcher_name))
-        
+
         result = sorted(result)
         return result
-        
