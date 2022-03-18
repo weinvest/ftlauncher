@@ -1,10 +1,12 @@
 import os
 import json
 import logging
+from toposort import toposort_flatten
+from collections import OrderedDict
 from launcher import *
 class Loader(object):
     def __init__(self, dconn):
-        self.launchers = {}
+        self.launchers = OrderedDict()
         self.home_root = '/home'
         self.dconn = dconn
 
@@ -45,7 +47,7 @@ class Loader(object):
 
         start_cmd = conf.get('start_cmd', '')
         if 0 == len(start_cmd) and 'all' != launcher_name:
-            logging.warn("not start_cmd found for %s/%s, ignore it's configure"
+            logging.warn("no start_cmd found for %s/%s, ignore it's configure"
                 , user
                 , launcher_name)
             return None
@@ -152,6 +154,8 @@ class Loader(object):
         return (user, dep_name)
 
     def resolve(self):
+        from collections import defaultdict
+        used_for_toposort = defaultdict(list)
         for launcher_name, launchers in self.launchers.items():
             for user, launcher in launchers.items():
                 is_resoloved = True
@@ -162,9 +166,31 @@ class Loader(object):
                     if dep_launcher is not None:
                         logging.info(f"resolove {user}/{launcher.name}'s depency {dependence_name}")
                         launcher.add_dependence(dep_launcher)
+                        used_for_toposort[launcher].append(dep_launcher)
                     else:
                         is_resoloved = False
                 launcher.is_resoloved = is_resoloved
+
+        try:
+            self.launchers = OrderedDict()
+            sorted_launchers = toposort_flatten(used_for_toposort, False)
+            for idx , launcher in enumerate(sorted_launchers):
+                launcher.dep_idx = idx
+                self.add_launcher(launcher.user, launcher)
+
+            logging.error(f'toposort launchers success')
+        except Exception as e:
+            logging.error(f'toposort launchers failed: {e}')
+            return
+
+        try:
+            for launcher in sorted_launchers:
+                launcher.sort_dependences()
+            logging.info('sort launchers deps success')
+
+        except Exception as e:
+            logging.error(f'sort launchers deps failed: {e}')
+
 
     def list(self, user=None):
         result = []
