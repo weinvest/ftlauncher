@@ -90,10 +90,12 @@ if __name__ == '__main__':
     port = int(sys.argv[2])
     logging.basicConfig(level = logging.DEBUG)
 
-    with socketserver.TCPServer((host, port), LauncherServer) as server:
+    with socketserver.TCPServer((host, port), LauncherServer, bind_and_activate=False) as server:
         # Activate the server; this will keep running until you
         # interrupt the program with Ctrl-C
         server.dconn = parent_conn
         server.allow_reuse_address = True
+        server.server_bind()
+        server.server_activate()
         server.serve_forever()
         
