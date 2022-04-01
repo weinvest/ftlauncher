@@ -16,17 +16,17 @@ class CommandStatus(object):
         self.command=str(cmd)
         self.retcode=retcode
         self.message= str(msg)
-
+        
     def __str__(self):
         return json.dumps(self,  cls=CommandStatusEncoder)
-
-class CommandStatusEncoder(json.JSONEncoder):
+    
+class CommandStatusEncoder(json.JSONEncoder):    
     def default(self, obj):
         if isinstance(obj, CommandStatus):
             return {'command': obj.command
                 , 'retcode': obj.retcode
                 , 'message': obj.message}
-
+                
         return json.JSONEncoder.default(self, obj)
 
 def set_environ(dir):
@@ -36,7 +36,7 @@ def set_environ(dir):
     else:
         boost_lib = os.path.join(os.environ['BOOST_ROOT'], 'lib')
         hdf5_lib = os.path.join(os.environ['HDF5_ROOT'], 'lib')
-        os.environ[ld_library_path] = ':'.join([dir, '/usr/local/lib', '/usr/lib', boost_lib, hdf5_lib])
+        os.environ[ld_library_path] = ':'.join([dir, '/usr/local/lib', '/usr/lib', boost_lib, hdf5_lib])  
 
 @decorator
 def set_working_dir(f, self):
@@ -77,24 +77,24 @@ class Launcher(object):
         self.work_dir = self.normalize_path(work_dir)
         self.out_dir = self.normalize_path(out_dir) if out_dir is not None else self.work_dir
         self.dconn = dconn
-
+        
         self.dependences = []
         self.dependence_names = []
         self.is_resoloved = False
         self.pid_file_name = '/tmp/.{0}.pid'.format(self.name)
         self.is_help = False
         self.dep_idx = -1
-
+    
     def sort_dependences(self):
         self.dependences = sorted(self.dependences, key=lambda l : l.dep_idx)
 
-    def normalize_path(self, p):
+    def normalize_path(self, p): 
         if p is None:
             return None
-
-        p1 = p.replace('~',  self.home_dir)
-        return p1.strip()
-
+            
+        p1 = p.replace('~',  self.home_dir) 
+        return p1.strip() 
+        
     def set_start_command(self
         , cmd
         , pre_start_cmd=None
@@ -109,20 +109,20 @@ class Launcher(object):
             else:
                 cmds = self.start_cmd.split()
                 idx = cmds.index('-n')
-                self.cmd_user = cmds[idx+1]
+                self.cmd_user = cmds[idx+1]        
         else:
             self.cmd_user = self.user
         #if not self.start_cmd.startswith('nohup'):
         #    self.start_cmd = 'nohup {0} '.format(self.start_cmd)
-
+        
         #if '>' not in self.start_cmd:
         #self.start_cmd += ' >stdout.txt'
-
+            
         self.pre_start_cmd = self.normalize_path(pre_start_cmd)
         self.post_start_cmd = self.normalize_path(post_start_cmd)
         self.ignore_pre_start_error = ignore_pre_error
         self.ignore_post_start_error = ignore_post_error
-
+    
     def set_stop_command(self
         , cmd
         , pre_stop_cmd=None
@@ -134,18 +134,18 @@ class Launcher(object):
         self.post_stop_cmd = self.normalize_path(post_stop_cmd)
         self.ignore_pre_stop_error = ignore_pre_error
         self.ignore_post_stop_error = ignore_post_error
-
+    
     def set_status_command(self
         , cmd):
         self.status_cmd = self.normalize_path(cmd)
-
+    
     def add_dependence(self, launcher):
         self.dependences.append(launcher)
-
+                
     def run_cmd(self, cmd, ignore_error=False, timeout=15, auto_work_dir=True):
         if cmd is None or 0 == len(cmd):
             return CommandStatus('', 0, 'no command execed')
-
+  
         import tempfile
         out = tempfile.TemporaryFile(mode='w+')
         msg = ''
@@ -170,16 +170,16 @@ class Launcher(object):
             msg = str(e)
             retcode = -1
             if not ignore_error:
-                raise
-
+                raise 
+               
         out.seek(0)
         msg = [str(s) for s in out.readlines()]
         if 0 != len(msg):
             msg = ''.join(msg)
-
+            
         cmd_status = CommandStatus(cmd, retcode, msg)
         return cmd_status
-
+        
     def run_as_daemon(self, cmd, ignore_error, timeout=1.0):
         self.dconn.send([cmd, self.user, self.work_dir, self.out_dir, self.name, timeout])
         retcode, msg = self.dconn.recv()
@@ -188,7 +188,7 @@ class Launcher(object):
         else:
             raise RuntimeError(CommandStatus(cmd, retcode, msg))
 
-    @set_working_dir
+    @set_working_dir        
     def do_start(self):
         result=[]
         try:
@@ -228,8 +228,8 @@ class Launcher(object):
             traceback.print_exc(file=sys.stdout)
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
             return result
-
-    @set_working_dir
+            
+    @set_working_dir     
     def do_stop(self):
         result = []
         try:
@@ -254,16 +254,16 @@ class Launcher(object):
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
         finally:
             return result
-
-    @set_working_dir
+            
+    @set_working_dir         
     def do_restart(self):
         stop_result = self.do_stop()
         start_result = self.do_start()
         result = stop_result
         result.extend(start_result)
         return result
-
-    @set_working_dir
+    
+    @set_working_dir     
     def do_status(self):
         result = []
         try:
@@ -280,13 +280,14 @@ class Launcher(object):
             result.append(CommandStatus(cur_cmd, -1,  str(e)))
         finally:
             return result
-
+    
     def do_unknown(self, do_4_dep = False):
         return [CommandStatus('unknown', -1, 'unknown op')]
-
+    
     def format_result(self, result):
         if isinstance(result, list):
             js_result = [str(i) for i in result]
             return '['+',\n'.join(js_result)+']'
         else:
             return result
+        

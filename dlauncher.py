@@ -49,10 +49,15 @@ def run_daemon(ctx):
             work_usr = pwd.getpwnam(ctx.user)
             os.chown(stdout_file, work_usr.pw_uid, work_usr.pw_gid)
 
-            args = ['su', ctx.user, '-lc', f'cd {ctx.work_dir} && '+cmd]
-            envs = {'LD_LIBRARY_PATH': os.environ["LD_LIBRARY_PATH"]}
+            #args = ['su', ctx.user, '-lc', f'cd {ctx.work_dir};'+cmd]
+            #envs = {'LD_LIBRARY_PATH': os.environ["LD_LIBRARY_PATH"]}
+            #os.execvpe(args[0], args, env=envs)
 
-            os.execvpe(args[0], args, env=envs)
+            os.setuid(work_usr.pw_uid)
+            os.chdir(ctx.work_dir)
+            envs = {'LD_LIBRARY_PATH': os.environ["LD_LIBRARY_PATH"], 'BASH_ENV': f"{work_usr.pw_dir}/.bashrc", 'HOME': work_usr.pw_dir}
+
+            os.execvpe('/usr/bin/bash', ['/usr/bin/bash', '-c', cmd], env=envs)
 
         except Exception:
             pid = child_pid if 0 != child_pid else os.getpid()
