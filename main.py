@@ -65,8 +65,9 @@ class LauncherServer(socketserver.StreamRequestHandler):
                                     dep_fun = getattr(dep, 'do_{0}'.format(op), dep.do_unknown)
                                     result.extend(dep_fun())
 
-                            op_fun = getattr(launcher, 'do_{0}'.format(op), launcher.do_unknown)
-                            result.extend(op_fun())
+                            if 'all' != process_name:
+                                op_fun = getattr(launcher, 'do_{0}'.format(op), launcher.do_unknown)
+                                result.extend(op_fun())
                             result = launcher.format_result(result)
                     except Exception as e:
                         result += str(e)
