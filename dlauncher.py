@@ -68,6 +68,7 @@ def run_daemon(ctx):
             sys.exit(0)
     else:
         time.sleep(timeout)
+        os.waitpid(child_pid, 0)
         pid = ps_utils.get_pid(pid_file_name)
         if 0 == pid:
             now = datetime.datetime.now().timestamp()
